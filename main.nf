@@ -169,6 +169,7 @@ include {
     owl_msi;
     chord_hrd;
     hrd_scores;
+    scarhrd;
     pcgr_v212_deepSomatic;
     collect_clinical_summary;
     purple_genome_view;
@@ -365,6 +366,8 @@ workflow DNA_SOMATIC {
             | set { hrd_input }
         hrd_scores(hrd_input)
 
+        scarhrd(purple.out.purple_pass_for_hrd)
+
         // PCGR
         deepSomatic.out.pcgr_vcf.join(purple.out.cna_for_pcgr)
             | map { meta, pcgr_vcf, pcgr_idx, cna -> tuple(meta, [pcgr_vcf, pcgr_idx, cna]) }
@@ -391,16 +394,17 @@ workflow DNA_SOMATIC {
             | map { meta, amberQC, amberBAF -> [meta.id, meta, amberQC, amberBAF] }
             | join( purple.out.for_yaml_summary | map { meta, pur, dr, cnv -> [meta.id, pur, dr, cnv] } )
             | join( chord_hrd.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
+            | join( scarhrd.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
             | join( pcgr_v212_deepSomatic.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
             | join( wakhan.out.wakhanTSV | map { meta, f -> [meta.id, f] } )
             | join( methbat_for_yaml_ch )
             | join( owl_for_yaml_ch )
             | join( cramino_for_yaml_ch )
-            | map { id, meta, amberQC, amberBAF, pur, driver, cnv, chord, pcgr, wak, mb_n, mb_t, owl_n, owl_t, cr_n, cr_t ->
+            | map { id, meta, amberQC, amberBAF, pur, driver, cnv, chord, scar, pcgr, wak, mb_n, mb_t, owl_n, owl_t, cr_n, cr_t ->
                 tuple(meta, [
                     amberQC: amberQC, amberBAF: amberBAF,
                     purple_purity: pur, purple_driver: driver, purple_cnv: cnv,
-                    chord: chord, pcgr: pcgr, wakhan: wak,
+                    chord: chord, scarhrd: scar, pcgr: pcgr, wakhan: wak,
                     methbat_n: mb_n, methbat_t: mb_t, owl_n: owl_n, owl_t: owl_t,
                     cramino_n: cr_n, cramino_t: cr_t
                 ])

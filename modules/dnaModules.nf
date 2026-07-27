@@ -913,6 +913,29 @@ process hrd_scores {
     """
 }
 
+process scarhrd {
+    label "low"
+    tag "$meta.id"
+    conda "${params.scarhrd}"
+
+    publishDir "${meta.id}/toolsOutputDNA/scarHRD/", mode: 'copy'
+
+    input:
+    tuple val(meta), path(purpleCNV)
+    // purpleCNV: purple *.purple.cnv.somatic.tsv (from purple.out.purple_pass_for_hrd)
+
+    output:
+    tuple val(meta), path("${meta.prefixTN}.scarHRD.txt"),         emit: scarhrd_full
+    tuple val(meta), path("${meta.prefixTN}.scarHRD.summary.txt"), emit: for_yaml_summary
+
+    script:
+    """
+    Rscript ${params.scarhrd_Rscript} \
+        $purpleCNV \
+        ${meta.npnTumor} \
+        ${meta.prefixTN}
+    """
+}
 
 
 
