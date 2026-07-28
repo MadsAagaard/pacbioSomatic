@@ -429,7 +429,7 @@ process collect_clinical_summaryRNA {
         --pigeon-raw         ${data.pigeonRawJSON} \
         --pigeon-filtered    ${data.pigeonFilteredJSON} \
         --pbfusion           ${data.fusionInhouse} \
-        --html-template      ${params.clinical_summaryRNA_html} \ 
+        --html-template      ${params.clinical_summaryRNA_html} \
         --output             ${meta.prefixTN}.clinical_summaryRNA
     """
 }
