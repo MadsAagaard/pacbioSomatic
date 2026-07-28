@@ -830,6 +830,7 @@ process owl_msi {
     """
 }
 
+/*
 process chord_hrd {
     label "low"
     tag "$meta.id"
@@ -858,7 +859,7 @@ process chord_hrd {
         ${meta.prefixTN}
     """
 }
-
+*/
 process hrd_scores {
     label "low"
     tag "$meta.id"
@@ -1046,8 +1047,7 @@ process collect_clinical_summary {
         --cramino-tumor      ${data.cramino_t} \
         --cramino-normal     ${data.cramino_n} \
         --owl-tumor          ${data.owl_t} \
-        --owl-normal         ${data.owl_n} \
-        --chord              ${data.chord} \
+        --owl-normal         ${data.owl_n} \ 
         --purple-drivers     ${data.purple_driver} \
         --purple-purity      ${data.purple_purity} \
         --cnv-plot-png       ${data.cnv_plot} \
@@ -1057,6 +1057,7 @@ process collect_clinical_summary {
         --wakhan             ${data.wakhan} \
         --hrdetect-json      ${data.hrdetectJson} \
         --chord-json         ${data.chordJson} \
+        --scarhrd            ${data.scarhrd} \
         --mutpattern-snv2020 ${data.snv2020Json} \
         --mutpattern-snv2015 ${data.snv2015Json} \
         --mutpattern-indel   ${data.indelJson} \
@@ -1066,7 +1067,7 @@ process collect_clinical_summary {
         --output             ${meta.prefixTN}.clinical_summaryDNA
     """
 }
-
+//  --chord              ${data.chord} \
 process purple_genome_view {
     label "low"
     tag "$meta.id"

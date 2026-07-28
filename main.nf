@@ -26,6 +26,26 @@ runID = "${date}.${user}"
 // -------------------------- naming (single source) ---------------------------
 //def samplePrefix = { npn, sampletype -> "${npn}.${sampletype}.${params.genome_version}.${params.readSet}" }
 
+// ---- shared pcgr tag helper (define BEFORE the prefix closures) ----
+def pcgrTag = { pcgr ->
+    def code = pcgr?.toString()?.trim()
+    (code && !(code.toLowerCase() in ['', 'na', '-', '.', 'null'])) ? ".pcgr_${code}" : ''
+}
+
+def samplePrefix = { npn, sampletype, pcgr = null ->
+    def tag = (sampletype in ['tumor', 'rna']) ? pcgrTag(pcgr) : ''
+    "${npn}.${sampletype}${tag}.${params.genome_version}.${params.readSet}"
+}
+
+def tnPrefix = { id, pcgr = null ->
+    "${id}${pcgrTag(pcgr)}.${params.genome_version}.${params.readSet}"
+}
+// 
+def isMissing = { v -> (v == null) || (v.toString().trim().toLowerCase() in ['', 'na', '-', '.', 'null']) }
+
+
+/*
+
 def samplePrefix = { npn, sampletype, pcgr = null ->
     def code    = pcgr?.toString()?.trim()
     def useCode = code && !(code.toLowerCase() in ['', 'na', '-', '.', 'null'])
@@ -38,7 +58,7 @@ def tnPrefix     = { id  -> "${id}.${params.genome_version}.${params.readSet}" }
 //def rnaPrefix    = { id, npn            -> "${npn}.${params.genome_version}.rna" }
 
 def isMissing = { v -> (v == null) || (v.toString().trim().toLowerCase() in ['', 'na', '-', '.', 'null']) }
-
+*/
 
 /* =============================================================================
  *  RAW INPUT GLOBS  (two arms, two filename grammars)
@@ -46,8 +66,8 @@ def isMissing = { v -> (v == null) || (v.toString().trim().toLowerCase() in ['',
 
 // ---- DNA ubams: <archive>/**/<npn>...hifi_reads[.allReads].bam ----
 def dnaInputBam
-if (params.input) {
-    dnaInputBam = params.allReads ? "${params.input}/*.bam" : "${params.input}/*.hifi_reads.*.bam"
+if (params.inputDNA) {
+    dnaInputBam = params.allReads ? "${params.inputDNA}/*.bam" : "${params.inputDNA}/*.hifi_reads.*.bam"
 } else {
     dnaInputBam = params.allReads ? "${params.dataArchiveDNA}/**/*.bam" : "${params.dataArchiveDNA}/**/*.hifi_reads.*.bam"
 }
@@ -109,7 +129,7 @@ Channel.fromPath(params.samplesheet)
             prefixNormal: samplePrefix(meta.npnNormal, 'normal'),
             prefixTumor:  samplePrefix(meta.npnTumor,  'tumor',meta.pcgr),
             prefixRNA:    hasRNA ? samplePrefix(meta.npnRNA, 'rna',meta.pcgr) : null,
-            prefixTN:     tnPrefix(meta.id)
+            prefixTN:     tnPrefix(meta.id,meta.pcgr)
         ]
     }
     | set { cases_ch }
@@ -167,7 +187,7 @@ include {
     amber;
     purple;
     owl_msi;
-    chord_hrd;
+    //chord_hrd;
     hrd_scores;
     scarhrd;
     pcgr_v212_deepSomatic;
@@ -284,7 +304,7 @@ workflow DNA_PHASE {
                     meta + [
                         prefixNormal: samplePrefix(meta.npnNormal, 'normal'),
                         prefixTumor:  samplePrefix(meta.npnTumor,  'tumor',meta.pcgr),
-                        prefixTN:     tnPrefix(meta.id)
+                        prefixTN:     tnPrefix(meta.id,meta.pcgr)
                     ],
                     [
                         bamNormal: bamN, baiNormal: baiN,
@@ -359,7 +379,7 @@ workflow DNA_SOMATIC {
         deepSomatic_edits.out.vcf.join(severus_edits.out.vcf)
             | map { meta, dsVCF, svVCF -> tuple(meta, [dsVCF, svVCF]) }
             | set { chord_input }
-        chord_hrd(chord_input)
+        //chord_hrd(chord_input)
 
         deepSomatic_edits.out.vcf.join(severus_edits.out.vcf).join(purple.out.purple_pass_for_hrd)
             | map { meta, dsVCF, svVCF, purpleCNV -> tuple(meta, [dsVCF, svVCF, purpleCNV]) }
@@ -389,7 +409,7 @@ workflow DNA_SOMATIC {
             | map { meta, j -> [meta.id, meta.sampletype, j] } | groupTuple(by: 0)
             | map { id, st, js -> [id, js[st.indexOf('normal')], js[st.indexOf('tumor')]] }
             | set { methbat_for_yaml_ch }
-
+/*
         amber.out.for_yaml_summary
             | map { meta, amberQC, amberBAF -> [meta.id, meta, amberQC, amberBAF] }
             | join( purple.out.for_yaml_summary | map { meta, pur, dr, cnv -> [meta.id, pur, dr, cnv] } )
@@ -410,6 +430,27 @@ workflow DNA_SOMATIC {
                 ])
             }
             | set { for_summary_final_ch }
+*/
+        amber.out.for_yaml_summary
+            | map { meta, amberQC, amberBAF -> [meta.id, meta, amberQC, amberBAF] }
+            | join( purple.out.for_yaml_summary | map { meta, pur, dr, cnv -> [meta.id, pur, dr, cnv] } )
+            | join( scarhrd.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
+            | join( pcgr_v212_deepSomatic.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
+            | join( wakhan.out.wakhanTSV | map { meta, f -> [meta.id, f] } )
+            | join( methbat_for_yaml_ch )
+            | join( owl_for_yaml_ch )
+            | join( cramino_for_yaml_ch )
+            | map { id, meta, amberQC, amberBAF, pur, driver, cnv, scar, pcgr, wak, mb_n, mb_t, owl_n, owl_t, cr_n, cr_t ->
+                tuple(meta, [
+                    amberQC: amberQC, amberBAF: amberBAF,
+                    purple_purity: pur, purple_driver: driver, purple_cnv: cnv,
+                    scarhrd: scar, pcgr: pcgr, wakhan: wak,
+                    methbat_n: mb_n, methbat_t: mb_t, owl_n: owl_n, owl_t: owl_t,
+                    cramino_n: cr_n, cramino_t: cr_t
+                ])
+            }
+            | set { for_summary_final_ch }
+
 
         purple_genome_view(for_summary_final_ch)
 
