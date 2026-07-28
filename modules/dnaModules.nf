@@ -1047,7 +1047,7 @@ process collect_clinical_summary {
         --cramino-tumor      ${data.cramino_t} \
         --cramino-normal     ${data.cramino_n} \
         --owl-tumor          ${data.owl_t} \
-        --owl-normal         ${data.owl_n} \ 
+        --owl-normal         ${data.owl_n} \
         --purple-drivers     ${data.purple_driver} \
         --purple-purity      ${data.purple_purity} \
         --cnv-plot-png       ${data.cnv_plot} \
