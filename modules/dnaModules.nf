@@ -933,9 +933,9 @@ process scarhrd_purple {
     script:
     """
     Rscript ${params.scarhrd_Rscript_v2} \
-        $purpleCNV \
-        ${meta.npnTumor} \
-        ${meta.prefixTN}.purple
+        --input  $purpleCNV \
+        --sample ${meta.npnTumor} \
+        --out    ${meta.prefixTN}.purple
     """
 }
 
