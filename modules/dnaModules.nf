@@ -970,40 +970,6 @@ process scarhrd_wakhan {
         --ploidy ${wakhanPloidy}
     """
 }
-/*
-process hrdetect_hrd {
-    label "low"
-    tag "$meta.id"
-    conda "${params.hrdetect}"
-
-    publishDir "${meta.id}/toolsOutputDNA/HRD/",        mode: 'copy'
-    publishDir "${meta.id}/TUMORBOARDFILES/DNA/",    mode: 'copy', pattern: "*.hrdetect.summary.txt"
-
-    input:
-    tuple val(meta), val(data)
-    // data.deepSomaticVCF  : deepSomatic PASS VCF
-    // data.severusVCF      : severus somatic SV VCF (normalAdded)
-    // data.purpleCNV       : purple CNV somatic TSV
-
-    output:
-    tuple val(meta), path("${meta.prefixTN}.hrdetect.txt"),         emit: hrdetect_full
-    tuple val(meta), path("${meta.prefixTN}.hrdetect.summary.txt"), emit: hrdetect_summary
-
-    script:
-
-    """
-    # Step 1: convert severus VCF to BEDPE
-    bash ${params.hrdetect_bedpe_script} ${data.severusVCF} ${meta.prefixTN}.severus.bedpe
-
-    # Step 2: run HRDetect
-    Rscript ${params.hrdetect_Rrscript} \
-        ${data.deepSomaticVCF} \
-        ${meta.prefixTN}.severus.bedpe \
-        ${data.purpleCNV} \
-        ${meta.npnTumor} \
-        ${meta.prefixTN}
-    """
-}
 
 */
 process pcgr_v212_deepSomatic {
@@ -1157,7 +1123,27 @@ process wakhan {
 }
 
 
+process alignmentLinks_tumorboard {
+    label 'low'
+    tag  "$meta.id"
 
+    input:
+    tuple val(meta), val(bamName), val(baiName)
+
+    output:
+    tuple val(meta), val(bamName), emit: linked   // token; keeps it in the DAG
+
+    script:
+    def realDir = "${launchDir}/${meta.id}/alignments"
+    def tbDir   = "${launchDir}/${meta.id}/${params.tumorboard_align_subdir}"
+    """
+    mkdir -p '${tbDir}'
+    for f in '${bamName}' '${baiName}'; do
+        rel=\$(realpath -ms --relative-to='${tbDir}' "${realDir}/\$f")
+        ln -sf "\$rel" "${tbDir}/\$f"
+    done
+    """
+}
 
 
 
