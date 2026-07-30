@@ -932,7 +932,7 @@ process scarhrd_purple {
 
     script:
     """
-    Rscript ${params.scarhrd_Rscript_v2} \
+    Rscript ${params.scarhrd_Rscript} \
         --input  $purpleCNV \
         --sample ${meta.npnTumor} \
         --out    ${meta.prefixTN}.purple
@@ -962,7 +962,7 @@ process scarhrd_wakhan {
         --out ${meta.prefixTN}.wakhan.scarHRD_input.tsv \
         ${mincnq}
 
-    Rscript ${params.scarhrd_Rscript_v2} \
+    Rscript ${params.scarhrd_Rscript} \
         --input  ${meta.prefixTN}.wakhan.scarHRD_input.tsv \
         --sample ${meta.npnTumor} \
         --out    ${meta.prefixTN}.wakhan \
