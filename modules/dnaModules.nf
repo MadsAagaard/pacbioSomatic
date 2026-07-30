@@ -632,6 +632,7 @@ process severus {
     --vntr-bed ${params.vntr_severus} \
     --phasing-vcf ${data.dv_vcf} \
     --threads ${task.cpus} \
+    --use-supplementary-tag \
     --out-dir ${meta.prefixTN}.severus
 
     mv ${meta.prefixTN}.severus/somatic_SVs/severus_somatic.vcf ${meta.prefixTN}.severusSomaticSV.vcf    
@@ -914,7 +915,7 @@ process hrd_scores {
     """
 }
 
-process scarhrd {
+process scarhrd_purple {
     label "low"
     tag "$meta.id"
     conda "${params.scarhrd}"
@@ -926,20 +927,49 @@ process scarhrd {
     // purpleCNV: purple *.purple.cnv.somatic.tsv (from purple.out.purple_pass_for_hrd)
 
     output:
-    tuple val(meta), path("${meta.prefixTN}.scarHRD.txt"),         emit: scarhrd_full
-    tuple val(meta), path("${meta.prefixTN}.scarHRD.summary.txt"), emit: for_yaml_summary
+    tuple val(meta), path("${meta.prefixTN}.purple.scarHRD.txt"),         emit: scarhrd_full
+    tuple val(meta), path("${meta.prefixTN}.purple.scarHRD.summary.txt"), emit: for_yaml_summary
 
     script:
     """
     Rscript ${params.scarhrd_Rscript} \
         $purpleCNV \
         ${meta.npnTumor} \
-        ${meta.prefixTN}
+        ${meta.prefixTN}.purple
     """
 }
 
+process scarhrd_wakhan {
+    label "low"
+    tag "$meta.id"
+    conda "${params.scarhrd}"
+    publishDir "${meta.id}/toolsOutputDNA/scarHRD/", mode: 'copy'
 
+    input:
+    tuple val(meta), path(wakhanVCF)
 
+    output:
+    tuple val(meta), path("${meta.prefixTN}.wakhan.scarHRD.txt"),         emit: scarhrd_full
+    tuple val(meta), path("${meta.prefixTN}.wakhan.scarHRD.summary.txt"), emit: for_yaml_summary
+
+    script:
+    def wakhanPloidy = meta.wakhanPloidy ?: 'NA'
+    def mincnq = params.scarhrd_wakhan_minCNQ ? "--min-cnq ${params.scarhrd_wakhan_minCNQ}" : ""
+    """
+    python3 ${params.wakhan_scarhrd_py} \
+        --vcf ${wakhanVCF} \
+        --sample ${meta.npnTumor} \
+        --out ${meta.prefixTN}.wakhan.scarHRD_input.tsv \
+        ${mincnq}
+
+    Rscript ${params.scarhrd_Rscript_v2} \
+        --input  ${meta.prefixTN}.wakhan.scarHRD_input.tsv \
+        --sample ${meta.npnTumor} \
+        --out    ${meta.prefixTN}.wakhan \
+        --source table \
+        --ploidy ${wakhanPloidy}
+    """
+}
 /*
 process hrdetect_hrd {
     label "low"
@@ -1106,6 +1136,8 @@ process wakhan {
     output:
     tuple val(meta), path("wakhan/"), emit: wakhanDir
     tuple val(meta), path("wakhan/${meta.prefixTN}.wakhan.solutions_ranks.tsv"), emit: wakhanTSV
+    tuple val(meta), path("wakhan/solution_1/vcf_output/*_cna_integers.vcf.gz"), emit: vcf
+
     script:
     """
     wakhan all \
@@ -1115,6 +1147,9 @@ process wakhan {
     --normal-phased-vcf ${data.dv_vcf} \
     --breakpoints ${data.severusVCF} \
     --pdf-enable \
+    --ploidy-range ${params.wakhan_ploidy_range} \
+    --purity-range ${params.wakhan_purity_range} \
+    --genome-name ${meta.prefixTN}.wakhan \
     --out-dir-plots wakhan
 
     mv wakhan/solutions_ranks.tsv wakhan/${meta.prefixTN}.wakhan.solutions_ranks.tsv

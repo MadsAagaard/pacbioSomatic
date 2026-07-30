@@ -189,7 +189,8 @@ include {
     owl_msi;
     //chord_hrd;
     hrd_scores;
-    scarhrd;
+    scarhrd_purple;
+    scarhrd_wakhan;
     pcgr_v212_deepSomatic;
     collect_clinical_summary;
     purple_genome_view;
@@ -371,6 +372,8 @@ workflow DNA_SOMATIC {
             | map { meta, data, severusVCF -> tuple(meta, data + [severusVCF: severusVCF]) }
             | set { phasedAll_with_severusVCF }
 
+
+
         wakhan(phasedAll_with_severusVCF)
         purple(purple_pass_input)
 
@@ -386,7 +389,19 @@ workflow DNA_SOMATIC {
             | set { hrd_input }
         hrd_scores(hrd_input)
 
-        scarhrd(purple.out.purple_pass_for_hrd)
+        wakhan.out.vcf
+        | map { meta, vcf ->
+            def m = (vcf.name =~ /_([\d.]+)_([\d.]+)_([\d.]+)_wakhan_cna_integers/)
+            def ploidy = m ? m[0][1] : null
+            def purity = m ? m[0][2] : null
+            tuple(meta + [wakhanPloidy: ploidy, wakhanPurity: purity], vcf)
+        }
+        | set { wakhan_for_scarHRD }
+
+        scarhrd_purple(purple.out.purple_pass_for_hrd)
+
+        scarhrd_wakhan(wakhan_for_scarHRD)
+
 
         // PCGR
         deepSomatic.out.pcgr_vcf.join(purple.out.cna_for_pcgr)
