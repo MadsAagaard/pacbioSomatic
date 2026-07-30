@@ -971,7 +971,7 @@ process scarhrd_wakhan {
     """
 }
 
-*/
+
 process pcgr_v212_deepSomatic {
     tag "$meta.id"
     label 'medium'
