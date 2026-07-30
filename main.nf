@@ -543,7 +543,7 @@ workflow RNA_PREPROCESS {
         // per-molecule (refined FLNC) alignment — the BAM haplotag + ASE consume
         pbmm2_align_refined_forIsocall(isoseq_refine_cluster.out.isoseq_bam_refined)
         isocallProfile(pbmm2_align_refined_forIsocall.out.bam)
-        isocallCall(isocallProfile.out.profile)
+        //isocallCall(isocallProfile.out.profile)
 
         // clustered alignment — feeds collapse / pigeon / fusion
         pbmm2_align_clust(isoseq_refine_cluster.out.isoseq_bam_clustered)
