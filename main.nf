@@ -449,17 +449,18 @@ workflow DNA_SOMATIC {
         amber.out.for_yaml_summary
             | map { meta, amberQC, amberBAF -> [meta.id, meta, amberQC, amberBAF] }
             | join( purple.out.for_yaml_summary | map { meta, pur, dr, cnv -> [meta.id, pur, dr, cnv] } )
-            | join( scarhrd.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
+            | join( scarhrd_purple.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
+            | join( scarhrd_wakhan.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
             | join( pcgr_v212_deepSomatic.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
             | join( wakhan.out.wakhanTSV | map { meta, f -> [meta.id, f] } )
             | join( methbat_for_yaml_ch )
             | join( owl_for_yaml_ch )
             | join( cramino_for_yaml_ch )
-            | map { id, meta, amberQC, amberBAF, pur, driver, cnv, scar, pcgr, wak, mb_n, mb_t, owl_n, owl_t, cr_n, cr_t ->
+            | map { id, meta, amberQC, amberBAF, pur, driver, cnv, scar_purple,scar_wakhan, pcgr, wak, mb_n, mb_t, owl_n, owl_t, cr_n, cr_t ->
                 tuple(meta, [
                     amberQC: amberQC, amberBAF: amberBAF,
                     purple_purity: pur, purple_driver: driver, purple_cnv: cnv,
-                    scarhrd: scar, pcgr: pcgr, wakhan: wak,
+                    scarhrd: scar_purple, scarhrd_wakhan:scar_wakhan, pcgr: pcgr, wakhan: wak,
                     methbat_n: mb_n, methbat_t: mb_t, owl_n: owl_n, owl_t: owl_t,
                     cramino_n: cr_n, cramino_t: cr_t
                 ])
