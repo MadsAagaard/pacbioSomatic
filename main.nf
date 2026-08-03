@@ -191,6 +191,7 @@ include {
     hrd_scores;
     scarhrd_purple;
     scarhrd_wakhan;
+    scarhrd_wakhan_bed;
     pcgr_v212_deepSomatic;
     collect_clinical_summary;
     purple_genome_view;
@@ -398,10 +399,22 @@ workflow DNA_SOMATIC {
         }
         | set { wakhan_for_scarHRD }
 
+        wakhan.out.cnBed
+        | map { meta, hp1, hp2 ->
+            // <genome_name>_<ploidy>_<purity>_<conf>_copynumbers_segments_HP_1.bed
+            def m = (hp1.name =~ /_([\d.]+)_([\d.]+)_([\d.]+)_copynumbers_segments_HP_1\.bed$/)
+            return tuple(meta + [wakhanPloidy: m ? m[0][1] : null,
+                                 wakhanPurity: m ? m[0][2] : null,
+                                 wakhanConf:   m ? m[0][3] : null], hp1, hp2)
+        }
+        | set { wakhan_bed_for_scarHRD }
+
+
         scarhrd_purple(purple.out.purple_pass_for_hrd)
 
         scarhrd_wakhan(wakhan_for_scarHRD)
-
+        
+        scarhrd_wakhan_bed(wakhan_bed_for_scarHRD)
 
         // PCGR
         deepSomatic.out.pcgr_vcf.join(purple.out.cna_for_pcgr)

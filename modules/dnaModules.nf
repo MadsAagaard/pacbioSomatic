@@ -971,6 +971,52 @@ process scarhrd_wakhan {
     """
 }
 
+/* scarHRD on the Wakhan haplotype BEDs (v2 converter).
+   Runs alongside scarhrd_wakhan (v1, integers VCF) — different input
+   segmentation, so the two are NOT expected to agree. */
+process scarhrd_wakhan_bed {
+    label "low"
+    tag "$meta.id"
+    conda "${params.scarhrd}"
+
+    publishDir "${meta.id}/toolsOutputDNA/scarHRD/", mode: 'copy'
+
+    input:
+    tuple val(meta), path(bedHP1), path(bedHP2)
+
+    output:
+    tuple val(meta), path("${meta.prefixTN}.wakhanBED.scarHRD.txt"),         emit: scarhrd_full
+    tuple val(meta), path("${meta.prefixTN}.wakhanBED.scarHRD.summary.txt"), emit: for_yaml_summary
+    tuple val(meta), path("${meta.prefixTN}.wakhanBED.scarHRD_input.tsv"),   emit: seg_table
+    tuple val(meta), path("${meta.prefixTN}.wakhanBED.scarHRD_filters.txt"), emit: filter_report
+    tuple val(meta), path("${meta.prefixTN}.wakhanBED.dropped.bed"),         emit: dropped_bed
+
+    script:
+    def wakhanPloidy = meta.wakhanPloidy ?: 'NA'
+    def mincnq = params.scarhrd_wakhanBed_minCNQ     != null ? "--min-cnq ${params.scarhrd_wakhanBed_minCNQ}"          : ""
+    def mincov = params.scarhrd_wakhanBed_minCovFrac != null ? "--min-cov-frac ${params.scarhrd_wakhanBed_minCovFrac}" : ""
+    def minlen = params.scarhrd_wakhanBed_minSegLen  != null ? "--min-length ${params.scarhrd_wakhanBed_minSegLen}"    : ""
+    def excl   = (params.scarhrd_wakhanBed_excludeBeds ?: []).collect { return "--exclude-bed ${it}" }.join(' ')
+    """
+    python3 ${params.wakhan_scarhrd_bed_py} \
+        --bed-hp1     ${bedHP1} \
+        --bed-hp2     ${bedHP2} \
+        --sample      ${meta.npnTumor} \
+        --out         ${meta.prefixTN}.wakhanBED.scarHRD_input.tsv \
+        --report      ${meta.prefixTN}.wakhanBED.scarHRD_filters.txt \
+        --dropped-bed ${meta.prefixTN}.wakhanBED.dropped.bed \
+        ${excl} ${mincnq} ${mincov} ${minlen}
+
+    Rscript ${params.scarhrd_Rscript} \
+        --input  ${meta.prefixTN}.wakhanBED.scarHRD_input.tsv \
+        --sample ${meta.npnTumor} \
+        --out    ${meta.prefixTN}.wakhanBED \
+        --source table \
+        --ploidy ${wakhanPloidy}
+    """
+}
+
+
 
 process pcgr_v212_deepSomatic {
     tag "$meta.id"
@@ -1103,6 +1149,9 @@ process wakhan {
     tuple val(meta), path("wakhan/"), emit: wakhanDir
     tuple val(meta), path("wakhan/${meta.prefixTN}.wakhan.solutions_ranks.tsv"), emit: wakhanTSV
     tuple val(meta), path("wakhan/solution_1/vcf_output/*_cna_integers.vcf"), emit: vcf
+    tuple val(meta),
+          path("wakhan/solution_1/bed_output/*_copynumbers_segments_HP_1.bed"),
+          path("wakhan/solution_1/bed_output/*_copynumbers_segments_HP_2.bed"), emit: cnBed
 
     script:
     """
