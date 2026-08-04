@@ -463,7 +463,8 @@ workflow DNA_SOMATIC {
             | map { meta, amberQC, amberBAF -> [meta.id, meta, amberQC, amberBAF] }
             | join( purple.out.for_yaml_summary | map { meta, pur, dr, cnv -> [meta.id, pur, dr, cnv] } )
             | join( scarhrd_purple.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
-            | join( scarhrd_wakhan.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
+           // | join( scarhrd_wakhan.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
+            | join( scarhrd_wakhan_bed.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
             | join( pcgr_v212_deepSomatic.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
             | join( wakhan.out.wakhanTSV | map { meta, f -> [meta.id, f] } )
             | join( methbat_for_yaml_ch )
