@@ -190,7 +190,7 @@ include {
     //chord_hrd;
     hrd_scores;
     scarhrd_purple;
-    scarhrd_wakhan;
+    //scarhrd_wakhan;
     scarhrd_wakhan_bed;
     pcgr_v212_deepSomatic;
     collect_clinical_summary;
@@ -390,6 +390,7 @@ workflow DNA_SOMATIC {
             | set { hrd_input }
         hrd_scores(hrd_input)
 
+/*
         wakhan.out.vcf
         | map { meta, vcf ->
             def m = (vcf.name =~ /_([\d.]+)_([\d.]+)_([\d.]+)_wakhan_cna_integers/)
@@ -398,7 +399,7 @@ workflow DNA_SOMATIC {
             tuple(meta + [wakhanPloidy: ploidy, wakhanPurity: purity], vcf)
         }
         | set { wakhan_for_scarHRD }
-
+*/
         wakhan.out.cnBed
         | map { meta, hp1, hp2 ->
             // <genome_name>_<ploidy>_<purity>_<conf>_copynumbers_segments_HP_1.bed
@@ -412,7 +413,7 @@ workflow DNA_SOMATIC {
 
         scarhrd_purple(purple.out.purple_pass_for_hrd)
 
-        scarhrd_wakhan(wakhan_for_scarHRD)
+       // scarhrd_wakhan(wakhan_for_scarHRD)
         
         scarhrd_wakhan_bed(wakhan_bed_for_scarHRD)
 
@@ -464,19 +465,29 @@ workflow DNA_SOMATIC {
             | join( purple.out.for_yaml_summary | map { meta, pur, dr, cnv -> [meta.id, pur, dr, cnv] } )
             | join( scarhrd_purple.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
            // | join( scarhrd_wakhan.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
-            | join( scarhrd_wakhan_bed.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
+            | join( scarhrd_wakhan_bed.out.for_yaml_summary | map { meta, txt, json -> [meta.id, txt, json] } )
             | join( pcgr_v212_deepSomatic.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
             | join( wakhan.out.wakhanTSV | map { meta, f -> [meta.id, f] } )
             | join( methbat_for_yaml_ch )
             | join( owl_for_yaml_ch )
             | join( cramino_for_yaml_ch )
-            | map { id, meta, amberQC, amberBAF, pur, driver, cnv, scar_purple,scar_wakhan, pcgr, wak, mb_n, mb_t, owl_n, owl_t, cr_n, cr_t ->
+            | map { id, meta, amberQC, amberBAF, pur, driver, cnv, scar_purple,scar_wakhan_txt,scar_wakhan_json, pcgr, wak, mb_n, mb_t, owl_n, owl_t, cr_n, cr_t ->
                 tuple(meta, [
-                    amberQC: amberQC, amberBAF: amberBAF,
-                    purple_purity: pur, purple_driver: driver, purple_cnv: cnv,
-                    scarhrd: scar_purple, scarhrd_wakhan:scar_wakhan, pcgr: pcgr, wakhan: wak,
-                    methbat_n: mb_n, methbat_t: mb_t, owl_n: owl_n, owl_t: owl_t,
-                    cramino_n: cr_n, cramino_t: cr_t
+                    amberQC: amberQC,
+                    amberBAF: amberBAF,
+                    purple_purity: pur,
+                    purple_driver: driver,
+                    purple_cnv: cnv,
+                    scarhrd: scar_purple,
+                    scarhrd_wakhan_txt:scarhrd_wakhan_txt,scarhrd_wakhan_json:scarhrd_wakhan_json,
+                    pcgr: pcgr,
+                    wakhan: wak,
+                    methbat_n: mb_n,
+                    methbat_t: mb_t,
+                    owl_n: owl_n,
+                    owl_t: owl_t,
+                    cramino_n: cr_n,
+                    cramino_t: cr_t
                 ])
             }
             | set { for_summary_final_ch }

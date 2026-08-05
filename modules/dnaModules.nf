@@ -939,6 +939,7 @@ process scarhrd_purple {
     """
 }
 
+/*
 process scarhrd_wakhan {
     label "low"
     tag "$meta.id"
@@ -970,6 +971,7 @@ process scarhrd_wakhan {
         --ploidy ${wakhanPloidy}
     """
 }
+*/
 
 /* scarHRD on the Wakhan haplotype BEDs (v2 converter).
    Runs alongside scarhrd_wakhan (v1, integers VCF) — different input
@@ -985,12 +987,12 @@ process scarhrd_wakhan_bed {
     tuple val(meta), path(bedHP1), path(bedHP2)
 
     output:
-    tuple val(meta), path("${meta.prefixTN}.wakhanBED.scarHRD.txt"),         emit: scarhrd_full
-    //tuple val(meta), path("${meta.prefixTN}.wakhanBED.scarHRD.summary.txt"), emit: for_yaml_summary
+    tuple val(meta), path("${meta.prefixTN}.wakhanBED.scarHRD.txt"),
+                     path("${meta.prefixTN}.wakhanBED.segmentationReport.json"), emit: for_yaml_summary
     tuple val(meta), path("${meta.prefixTN}.wakhanBED.scarHRD_input.tsv"),   emit: seg_table
     tuple val(meta), path("${meta.prefixTN}.wakhanBED.scarHRD_filters.txt"), emit: filter_report
     tuple val(meta), path("${meta.prefixTN}.wakhanBED.dropped.bed"),         emit: dropped_bed
-    tuple val(meta), path("${meta.prefixTN}.wakhanBED.scarHRD_summary.json"), emit: summary_json
+    tuple val(meta), path("${meta.prefixTN}.wakhanBED.segmentationReport.json"), emit: summary_json
     script:
     def wakhanPloidy = meta.wakhanPloidy ?: 'NA'
     def mincnq = params.scarhrd_wakhanBed_minCNQ     != null ? "--min-cnq ${params.scarhrd_wakhanBed_minCNQ}"          : ""
@@ -1005,7 +1007,7 @@ process scarhrd_wakhan_bed {
         --out         ${meta.prefixTN}.wakhanBED.scarHRD_input.tsv \
         --report      ${meta.prefixTN}.wakhanBED.scarHRD_filters.txt \
         --dropped-bed ${meta.prefixTN}.wakhanBED.dropped.bed \
-        --report-json ${meta.prefixTN}.wakhanBED.scarHRD_summary.json
+        --report-json ${meta.prefixTN}.wakhanBED.segmentationReport.json \
         ${excl} ${mincnq} ${mincov} ${minlen}
 
     Rscript ${params.scarhrd_Rscript} \
@@ -1100,7 +1102,9 @@ process collect_clinical_summary {
         --wakhan             ${data.wakhan} \
         --hrdetect-json      ${data.hrdetectJson} \
         --chord-json         ${data.chordJson} \
-        --scarhrd            ${data.scarhrd} \
+        --scarhrd-purple     ${data.scarhrd} \
+        --scarhrd-wakhan     ${data.scarhrd_wakhan_txt} \
+        --scarhrd-wakhan-report-json ${data.scarhrd_wakhan_json} \
         --mutpattern-snv2020 ${data.snv2020Json} \
         --mutpattern-snv2015 ${data.snv2015Json} \
         --mutpattern-indel   ${data.indelJson} \
