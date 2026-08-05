@@ -196,6 +196,7 @@ include {
     collect_clinical_summary;
     purple_genome_view;
     wakhan;
+    alignmentLinks_tumorboard;
 } from './modules/dnaModules.nf'
 
 
@@ -318,6 +319,14 @@ workflow DNA_PHASE {
                 )
             }
             | set { phasedAll_ch }
+
+         hiPhase.out.hiphase_bam_normal
+         |mix(hiPhase.out.hiphase_bam_tumor)
+         | map { meta, bam, bai -> [meta, bam.name, bai.name] }
+         | set { align_links_ch }
+
+    alignmentLinks_tumorboard(align_links_ch)
+
     emit:
         phasedAll = phasedAll_ch
 }

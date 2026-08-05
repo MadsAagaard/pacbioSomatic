@@ -243,7 +243,7 @@ process pbfusion {
     conda "${params.pbfusion}"
 
     publishDir {"${meta.id}/toolsOutputRNA/pbfusion"}, mode: 'copy'
-    publishDir {"${meta.id}/TUMORBOARDFILES/RNA/"}, mode: 'copy',pattern: "*.INHOUSE.*"
+   // publishDir {"${meta.id}/TUMORBOARDFILES/"}, mode: 'copy',pattern: "*.INHOUSE.*"
    
 
     input:

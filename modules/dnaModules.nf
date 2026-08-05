@@ -200,7 +200,8 @@ process svdb_SawFish {
     publishDir "${params.lrsStorageBase}/sawfish/", mode: 'copy',pattern: "*.sawfishSV.hiphase.svdb.vcf*"
 
     publishDir {"${meta.id}/toolsOutputDNA/sawFish/"}, mode: 'copy', pattern: "*.sawfishSV.hiphase.svdb.*"
-    publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: '*.sawfishSV.hiphase.svdb.vcf*'
+   // publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: '*.sawfishSV.hiphase.svdb.vcf*'
+    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: '*.sawfishSV.hiphase.svdb.vcf*'
 
     input:
     tuple val(meta), val(data)
@@ -232,7 +233,7 @@ process hiPhase {
 
     publishDir "${meta.id}/alignments/", mode: 'copy', pattern: "*.hiphase.ba*"
     publishDir "${meta.id}/toolsOutputDNA/deepVariant/", mode: 'copy', pattern: "*.hiphase.deepvariant.*"
-    publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: '*.hiphase.deepvariant.*'
+    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: '*.hiphase.deepvariant.*'
     //publishDir "${meta.id}/toolsOutputDNA/sawfish_supporting_data/", mode: 'copy', pattern: "*.hiphase.sawfishSV.*"
 
     input:
@@ -558,7 +559,7 @@ process deepSomatic {
 process deepSomatic_edits {
     label "low"
     publishDir "${meta.id}/toolsOutputDNA/deepSomatic/", mode: 'copy'
-    publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: '*.normalAdded.*'
+    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: '*.normalAdded.*'
     input:
     tuple val(meta), val(data)
     
@@ -645,7 +646,7 @@ process severus_edits {
     tag "$meta.id"
     
     publishDir "${meta.id}/toolsOutputDNA/severus_somaticSV/", mode: 'copy'
-    publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: '*.normalAdded.*'
+    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: '*.normalAdded.*'
     
     input:
     tuple val(meta), path(data) // severus output vcf
@@ -748,8 +749,8 @@ process purple {
 
     publishDir "${meta.id}/toolsOutputDNA/hmftools/", mode: 'copy'
     //publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: "*.purity.tsv"
-    publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: "*.segment.tsv"
-    publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: "*.{html,png}"
+    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: "*.segment.tsv"
+    publishDir "${meta.id}/TUMORBOARDFILES/plots/", mode: 'copy', pattern: "*.{html,png}"
     //publishDir "${outputDir}/${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: "*.circos.png"
     //publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: "*.driver.catalog.somatic.tsv"
 
@@ -1120,7 +1121,7 @@ process purple_genome_view {
     tag "$meta.id"
     conda "${params.somaticSummaryEnv}"  // needs pyyaml, pandas, python-calamine
    
-    publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy'
+    publishDir "${meta.id}/TUMORBOARDFILES/plots/", mode: 'copy'
 
     input:
     tuple val(meta), val(data)
@@ -1146,6 +1147,8 @@ process wakhan {
     tag "$meta.id"
     conda "${params.wakhan}"  // needs pyyaml, pandas, python-calamine
     publishDir "${meta.id}/toolsOutputDNA/", mode: 'copy'
+    publishDir "${meta.id}/TUMORBOARDFILES/plots/", mode: 'copy', pattern: "*.copynumbers_breakpoints*"
+    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: "*_cna_integers.vcf"
 
     input:
     tuple val(meta), val(data)
@@ -1157,6 +1160,8 @@ process wakhan {
     tuple val(meta),
           path("wakhan/solution_1/bed_output/*_copynumbers_segments_HP_1.bed"),
           path("wakhan/solution_1/bed_output/*_copynumbers_segments_HP_2.bed"), emit: cnBed
+
+    tuple val(meta), path("wakhan/solution_1/*_copynumbers_breakpoints*"), emit: plots
 
     script:
     """
