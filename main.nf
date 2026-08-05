@@ -22,7 +22,7 @@ date  = new Date().format('yyMMdd')
 date2 = new Date().format('yyMMdd HH:mm:ss')
 user  = "$USER"
 runID = "${date}.${user}"
-
+ 
 // -------------------------- naming (single source) ---------------------------
 //def samplePrefix = { npn, sampletype -> "${npn}.${sampletype}.${params.genome_version}.${params.readSet}" }
 
