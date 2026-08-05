@@ -471,7 +471,7 @@ workflow DNA_SOMATIC {
             | join( methbat_for_yaml_ch )
             | join( owl_for_yaml_ch )
             | join( cramino_for_yaml_ch )
-            | map { id, meta, amberQC, amberBAF, pur, driver, cnv, scar_purple,scar_wakhan_txt,scar_wakhan_json, pcgr, wak, mb_n, mb_t, owl_n, owl_t, cr_n, cr_t ->
+            | map { id, meta, amberQC, amberBAF, pur, driver, cnv, scar_purple,scarhrd_wakhan_txt,scarhrd_wakhan_json, pcgr, wak, mb_n, mb_t, owl_n, owl_t, cr_n, cr_t ->
                 tuple(meta, [
                     amberQC: amberQC,
                     amberBAF: amberBAF,
