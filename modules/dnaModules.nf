@@ -1156,6 +1156,7 @@ process wakhan {
     output:
     tuple val(meta), path("wakhan/"), emit: wakhanDir
     tuple val(meta), path("wakhan/${meta.prefixTN}.wakhan.solutions_ranks.tsv"), emit: wakhanTSV
+    
     tuple val(meta), path("wakhan/solution_1/vcf_output/*_cna_integers.vcf"), emit: vcf
     tuple val(meta),
           path("wakhan/solution_1/bed_output/*_copynumbers_segments_HP_1.bed"),
