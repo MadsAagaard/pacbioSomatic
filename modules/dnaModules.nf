@@ -1148,7 +1148,7 @@ process wakhan {
     conda "${params.wakhan}"  // needs pyyaml, pandas, python-calamine
     publishDir "${meta.id}/toolsOutputDNA/", mode: 'copy'
     publishDir "${meta.id}/TUMORBOARDFILES/plots/", mode: 'copy', pattern: "*.copynumbers_breakpoints*"
-    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: "*_cna_integers.vcf"
+    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: "*_integers.vcf"
 
     input:
     tuple val(meta), val(data)
@@ -1156,7 +1156,7 @@ process wakhan {
     output:
     tuple val(meta), path("wakhan/"), emit: wakhanDir
     tuple val(meta), path("wakhan/${meta.prefixTN}.wakhan.solutions_ranks.tsv"), emit: wakhanTSV
-    
+
     tuple val(meta), path("wakhan/solution_1/vcf_output/*_cna_integers.vcf"), emit: vcf
     tuple val(meta),
           path("wakhan/solution_1/bed_output/*_copynumbers_segments_HP_1.bed"),
