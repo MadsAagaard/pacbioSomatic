@@ -64,11 +64,19 @@ process isoseq_refine_cluster {
     tuple val(meta), path(data)
     
     output:
-    tuple val(meta), path("${meta.id}.${meta.npnRNA}.flnc.clustered.bam"), path("${meta.id}.${meta.npnRNA}.flnc.clustered.bam.pbi"), emit: isoseq_bam_clustered
-    tuple val(meta), path("${meta.id}.${meta.npnRNA}.flnc.clustered.bam"),emit: bam_for_fofn
-    tuple val(meta), path("${meta.id}.${meta.npnRNA}.flnc.refined.bam"), path("${meta.id}.${meta.npnRNA}.flnc.refined.bam.pbi"), emit: isoseq_bam_refined
+    tuple val(meta),
+        path("${meta.id}.${meta.npnRNA}.flnc.clustered.bam"),
+        path("${meta.id}.${meta.npnRNA}.flnc.clustered.bam.pbi"),  emit: isoseq_flnc_clustered
+    
+    tuple val(meta), 
+        path("${meta.id}.${meta.npnRNA}.flnc.clustered.bam"),       emit: bam_for_fofn
+    
+    tuple val(meta), 
+        path("${meta.id}.${meta.npnRNA}.flnc.refined.bam"),
+        path("${meta.id}.${meta.npnRNA}.flnc.refined.bam.pbi"),     emit: isoseq_flnc_refined
 
-    tuple val(meta), path("${meta.id}.${meta.npnRNA}.flnc.refined.*.report.json"), emit: refine_report_json
+    tuple val(meta), 
+        path("${meta.id}.${meta.npnRNA}.flnc.refined.*.report.json"), emit: refine_report_json
 
     script:
     """
@@ -86,7 +94,7 @@ process isoseq_refine_cluster {
     """
 }
 
-process pbmm2_align_clust {
+process pbmm2_align_clusteredFLNC {
     label "high"
     tag "$meta.id"
     conda "${params.pbmm2}"
@@ -113,17 +121,20 @@ process pbmm2_align_clust {
     """
 }
 
-process pbmm2_align_refined_forIsocall {
+process pbmm2_align_refinedFLNC {
     label "high"
     tag "$meta.id"
     conda "${params.pbmm2}"
 
     publishDir {"${meta.id}/alignments/"}, mode: 'copy', pattern: '*.pbmm2.*'
+    
     input:
     tuple val(meta), path(bam), path(pbi)
     
     output:
-    tuple val(meta), path("${meta.prefixRNA}.refined.pbmm2.bam"), path("${meta.prefixRNA}.refined.pbmm2*bai"),  emit: bam
+    tuple val(meta), 
+        path("${meta.prefixRNA}.refined.pbmm2.bam"), 
+        path("${meta.prefixRNA}.refined.pbmm2*bai"),  emit: bam
  
     script:
     """
@@ -148,19 +159,27 @@ process isoseq_collapse {
     publishDir {"${meta.id}/toolsOutputRNA/isoseq/collapsed"}, mode: 'copy'
 
     input:
-    tuple val(meta), path(data)
+    tuple val(meta), val(data)
     
     output:
     tuple val(meta), path("*.collapsed.*"), emit: all
-    tuple val(meta), path("${meta.prefixRNA}.pbmm2.refined.collapsed.gff"),path("${meta.prefixRNA}.pbmm2.refined.collapsed.flnc_count.txt"), path("${meta.prefixRNA}.pbmm2.refined.collapsed.abundance.txt"), emit: collapsed_gff
+    
+    tuple val(meta),
+        path("${meta.prefixRNA}.refinedFLNC.collapsed.gff"),
+        path("${meta.prefixRNA}.refinedFLNC.collapsed.flnc_count.txt"),
+        path("${meta.prefixRNA}.refinedFLNC.collapsed.abundance.txt"), emit: collapsed_gff
+    
+    tuple val(meta),
+        path("${meta.prefixRNA}.refinedFLNC.collapsed.read_stat.txt"), emit: read_stat
+
+
     script:
-    def (refined_bam,refined_pbi,pbmm2_bam,pbmm2_bai) = data
     """
     isoseq collapse \
     --do-not-collapse-extra-5exons \
-    $pbmm2_bam \
-    $refined_bam \
-    ${meta.prefixRNA}.pbmm2.refined.collapsed.gff
+    ${data.refinedPbmm2BAM} \
+    ${data.refinedBAM}\
+    ${meta.prefixRNA}.refinedFLNC.collapsed.gff
     """
 }
 
@@ -175,18 +194,28 @@ process pigeon_classify {
     tuple val(meta), val(data)
     
     output:
-    tuple val(meta), path("*.pigeon*"),  emit: pigeon
-    tuple val(meta), path("*.filtered_lite_classification.txt"), emit: classification
-    tuple val(meta), path("*.collapsed.sorted.gff"),             emit: sortedGFF
-    tuple val(meta), path("*.filtered.report.json"), path("*.pigeon.report.json"),              emit: pigeon_reports_json
+    tuple val(meta), 
+        path("*.pigeon*"),                           emit: pigeon
+    
+    tuple val(meta), 
+        path("*.filtered_lite_classification.txt"),  emit: classification
+
+tuple val(meta), 
+        path("*.pigeon_classification.txt"),         emit: classification_unfiltered
+
+    tuple val(meta),
+        path("*.collapsed.sorted.gff"),              emit: sortedGFF
+    
+    tuple val(meta),
+        path("*.filtered.report.json"),
+        path("*.pigeon.report.json"),                emit: pigeon_reports_json
     script:
-   // def (refined_bam,refined_pbi,pbmm2_bam,pbmm2_bai, collapsed_gff,flnccounts,abundance) = data
     """
-    cp ${data.collapsedGFF} ${meta.prefixRNA}.pbmm2.refined.collapsed.gff 
-    pigeon prepare ${meta.prefixRNA}.pbmm2.refined.collapsed.gff
+    cp ${data.collapsedGFF} ${meta.prefixRNA}.pbmm2.collapsed.gff 
+    pigeon prepare ${meta.prefixRNA}.pbmm2.collapsed.gff
 
     pigeon classify \
-    ${meta.prefixRNA}.pbmm2.refined.collapsed.sorted.gff \
+    ${meta.prefixRNA}.pbmm2.collapsed.sorted.gff \
     ${params.pigeon_gtf} \
     ${params.genome_fasta} \
     --fl ${data.flncCounts} \
@@ -196,7 +225,7 @@ process pigeon_classify {
 
     pigeon filter \
     ${meta.prefixRNA}.pigeon_classification.txt \
-    ${meta.prefixRNA}.pbmm2.refined.collapsed.sorted.gff
+    ${meta.prefixRNA}.pbmm2.collapsed.sorted.gff
 
     pigeon report \
     --exclude-singletons \
@@ -256,7 +285,7 @@ process pbfusion {
     //def (refined_bam,refined_pbi,pbmm2_bam,pbmm2_bai) = data
     """
     pbfusion discover \
-    -b ${data.pbmm2BAM} \
+    -b ${data.clusteredPbmm2BAM} \
     --threads ${task.cpus} \
     --gtf ${params.gencode_gtf} \
     --min-coverage 4 \

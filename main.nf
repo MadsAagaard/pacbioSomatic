@@ -204,8 +204,8 @@ include {
     inputFiles_symlinks_ubamRNA;
     merge_ubams;
     isoseq_refine_cluster;
-    pbmm2_align_clust;
-    pbmm2_align_refined_forIsocall;
+    pbmm2_align_clusteredFLNC;
+    pbmm2_align_refinedFLNC;
     isoseq_collapse;
     pigeon_classify;
     sqanti3_QC;
@@ -575,32 +575,86 @@ workflow RNA_PREPROCESS {
         isoseq_refine_cluster(ubam_final)
 
         // per-molecule (refined FLNC) alignment — the BAM haplotag + ASE consume
-        pbmm2_align_refined_forIsocall(isoseq_refine_cluster.out.isoseq_bam_refined)
-        isocallProfile(pbmm2_align_refined_forIsocall.out.bam)
-        //isocallCall(isocallProfile.out.profile)
-
+        pbmm2_align_refinedFLNC(isoseq_refine_cluster.out.isoseq_flnc_refined)
         // clustered alignment — feeds collapse / pigeon / fusion
-        pbmm2_align_clust(isoseq_refine_cluster.out.isoseq_bam_clustered)
-
-        isoseq_refine_cluster.out.isoseq_bam_refined
-            .join(pbmm2_align_clust.out.bam)
-            | map { meta, refinedBam, refinedPbi, clusteredBam, clusteredPbi -> tuple(meta, [refinedBam, refinedPbi, clusteredBam, clusteredPbi]) }
+        pbmm2_align_clusteredFLNC(isoseq_refine_cluster.out.isoseq_flnc_clustered)
+     
+        isocallProfile(pbmm2_align_refinedFLNC.out.bam)
+        //isocallCall(isocallProfile.out.profile)
+/*
+        isoseq_refine_cluster.out.isoseq_flnc_refined
+            .join(pbmm2_align_clusteredFLNC.out.bam)
+            .join(pbmm2_align_refinedFLNC.out.bam)
+            | map { meta, refinedBam, refinedPbi, clusteredBam, clusteredPbi, refinedPbmm2BAM,refinedPbmm2BAI -> 
+                    tuple(meta, [
+                        refinedBAM: refinedBam,
+                        refinedPBI: refinedPbi,
+                        clusteredBAM: clusteredBam,
+                        clusteredPBI: clusteredPbi,
+                        refinedPbmm2BAM:refinedPbmm2BAM, 
+                        refinedPbmm2BAI:refinedPbmm2BAI
+                         ])
+                    }
             | set { isoseq_pbmm2_joined }
 
         isoseq_collapse(isoseq_pbmm2_joined)
 
+
+
+
         // assemble the canonical preprocess map (keys consumed downstream)
-        isoseq_refine_cluster.out.isoseq_bam_refined
+        isoseq_refine_cluster.out.isoseq_flnc_refined
             .join(isoseq_refine_cluster.out.refine_report_json)
-            .join(isoseq_refine_cluster.out.isoseq_bam_clustered)
-            .join(pbmm2_align_clust.out.bam)
+            .join(isoseq_refine_cluster.out.isoseq_flnc_clustered)
+            .join(pbmm2_align_clusteredFLNC.out.bam)
             .join(isoseq_collapse.out.collapsed_gff)
-            .join(pbmm2_align_refined_forIsocall.out.bam)
+            .join(pbmm2_align_refinedFLNC.out.bam)
             | map { meta, rb, rp, refine_json, cb, cp, pb, pi, gff, counts, abund,pbbm2_r, pbbm2_i ->
                 tuple(meta, [
                     refinedBAM:   rb, refinedPBI:   rp,
                     clusteredBAM: cb, clusteredPBI: cp,
-                    pbmm2BAM:     pb, pbmm2BAI:     pi,
+                    clusteredPbmm2BAM:     pb, clusteredPbmm2BAI:     pi,
+                    collapsedGFF: gff, flncCounts:  counts, flncAbundance: abund,
+                    refinedPbmm2BAM: pbbm2_r, refinedPbmm2BAI: pbbm2_i,
+                    refineReportJSON: refine_json
+                ])
+            }
+            | set { preprocess_all_joined }
+*/
+
+
+        isoseq_refine_cluster.out.isoseq_flnc_refined
+            .join(pbmm2_align_clusteredFLNC.out.bam)
+            .join(pbmm2_align_refinedFLNC.out.bam)
+            | map { meta, refinedBam, refinedPbi, clusteredBam, clusteredPbi, refinedPbmm2BAM,refinedPbmm2BAI -> 
+                    tuple(meta, [
+                        refinedBAM: refinedBam,
+                        refinedPBI: refinedPbi,
+                        clusteredBAM: clusteredBam,
+                        clusteredPBI: clusteredPbi,
+                        refinedPbmm2BAM:refinedPbmm2BAM, 
+                        refinedPbmm2BAI:refinedPbmm2BAI
+                         ])
+                    }
+            | set { isoseq_pbmm2_joined }
+
+        isoseq_collapse(isoseq_pbmm2_joined)
+
+
+
+
+        // assemble the canonical preprocess map (keys consumed downstream)
+        isoseq_refine_cluster.out.isoseq_flnc_refined
+            .join(isoseq_refine_cluster.out.refine_report_json)
+            .join(isoseq_refine_cluster.out.isoseq_flnc_clustered)
+            .join(pbmm2_align_clusteredFLNC.out.bam)
+            .join(isoseq_collapse.out.collapsed_gff)
+            .join(pbmm2_align_refinedFLNC.out.bam)
+            | map { meta, rb, rp, refine_json, cb, cp, pb, pi, gff, counts, abund,pbbm2_r, pbbm2_i ->
+                tuple(meta, [
+                    refinedBAM:   rb, refinedPBI:   rp,
+                    clusteredBAM: cb, clusteredPBI: cp,
+                    clusteredPbmm2BAM:     pb, clusteredPbmm2BAI:     pi,
                     collapsedGFF: gff, flncCounts:  counts, flncAbundance: abund,
                     refinedPbmm2BAM: pbbm2_r, refinedPbmm2BAI: pbbm2_i,
                     refineReportJSON: refine_json
@@ -611,7 +665,7 @@ workflow RNA_PREPROCESS {
         preprocessFullOutput = preprocess_all_joined
         // (meta, bam, bai) aligned refined FLNC BAM — per-molecule, for RNA_HAPLOTAG/ASE
         isoseqForSummary    = isoseq_refine_cluster.out.refine_report_json
-        refinedAlignedBam    = pbmm2_align_refined_forIsocall.out.bam
+        refinedAlignedBam    = pbmm2_align_refinedFLNC.out.bam
 }
 
 workflow RNA_TRANSCRIPTOME {
