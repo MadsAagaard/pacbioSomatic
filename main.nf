@@ -399,16 +399,7 @@ workflow DNA_SOMATIC {
             | set { hrd_input }
         hrd_scores(hrd_input)
 
-/*
-        wakhan.out.vcf
-        | map { meta, vcf ->
-            def m = (vcf.name =~ /_([\d.]+)_([\d.]+)_([\d.]+)_wakhan_cna_integers/)
-            def ploidy = m ? m[0][1] : null
-            def purity = m ? m[0][2] : null
-            tuple(meta + [wakhanPloidy: ploidy, wakhanPurity: purity], vcf)
-        }
-        | set { wakhan_for_scarHRD }
-*/
+
         wakhan.out.cnBed
         | map { meta, hp1, hp2 ->
             // <genome_name>_<ploidy>_<purity>_<conf>_copynumbers_segments_HP_1.bed
@@ -581,91 +572,52 @@ workflow RNA_PREPROCESS {
      
         isocallProfile(pbmm2_align_refinedFLNC.out.bam)
         //isocallCall(isocallProfile.out.profile)
-/*
+
+
+        // ---- the base map:  ------------------
         isoseq_refine_cluster.out.isoseq_flnc_refined
+            .join(isoseq_refine_cluster.out.isoseq_flnc_clustered)
+            .join(isoseq_refine_cluster.out.refine_report_json)
             .join(pbmm2_align_clusteredFLNC.out.bam)
             .join(pbmm2_align_refinedFLNC.out.bam)
-            | map { meta, refinedBam, refinedPbi, clusteredBam, clusteredPbi, refinedPbmm2BAM,refinedPbmm2BAI -> 
+            | map { meta, refinedFLNC, refinedFLNCPbi, clusteredFLNC, clusteredFLNCPbi,refine_json, clusteredBam,clusteredBai, refinedBAM,refinedBAI -> 
                     tuple(meta, [
-                        refinedBAM: refinedBam,
-                        refinedPBI: refinedPbi,
-                        clusteredBAM: clusteredBam,
-                        clusteredPBI: clusteredPbi,
-                        refinedPbmm2BAM:refinedPbmm2BAM, 
-                        refinedPbmm2BAI:refinedPbmm2BAI
+                        refinedFLNC:        refinedFLNC,
+                        refinedFLNCPbi:     refinedFLNCPbi,
+                        clusteredFLNC:      clusteredFLNC,
+                        clusteredFLNCPbi:   clusteredFLNCPbi,
+                        refineReportJSON:   refine_json,
+                        clusteredBAM:       clusteredBam,
+                        clusteredBAI:       clusteredBai,
+                        refinedBAM:         refinedBAM, 
+                        refinedBAI:         refinedBAI
                          ])
                     }
             | set { isoseq_pbmm2_joined }
 
         isoseq_collapse(isoseq_pbmm2_joined)
-
-
-
-
-        // assemble the canonical preprocess map (keys consumed downstream)
-        isoseq_refine_cluster.out.isoseq_flnc_refined
-            .join(isoseq_refine_cluster.out.refine_report_json)
-            .join(isoseq_refine_cluster.out.isoseq_flnc_clustered)
-            .join(pbmm2_align_clusteredFLNC.out.bam)
-            .join(isoseq_collapse.out.collapsed_gff)
-            .join(pbmm2_align_refinedFLNC.out.bam)
-            | map { meta, rb, rp, refine_json, cb, cp, pb, pi, gff, counts, abund,pbbm2_r, pbbm2_i ->
-                tuple(meta, [
-                    refinedBAM:   rb, refinedPBI:   rp,
-                    clusteredBAM: cb, clusteredPBI: cp,
-                    clusteredPbmm2BAM:     pb, clusteredPbmm2BAI:     pi,
-                    collapsedGFF: gff, flncCounts:  counts, flncAbundance: abund,
-                    refinedPbmm2BAM: pbbm2_r, refinedPbmm2BAI: pbbm2_i,
-                    refineReportJSON: refine_json
+        
+        // ---- Extend base map - still as metaMap for data------------------
+        isoseq_pbmm2_joined
+            .join(isoseq_collapse.out.collapsed_list)
+            .join(isoseq_collapse.out.read_stat)
+            .map { meta, base, gff, counts, abund,readStat ->
+                tuple(meta, base + [
+                    collapsedGFF:   gff, 
+                    flncCounts:     counts,
+                    flncAbundance:  abund,
+                    readStat:       readStat
                 ])
             }
-            | set { preprocess_all_joined }
-*/
-
-
-        isoseq_refine_cluster.out.isoseq_flnc_refined
-            .join(pbmm2_align_clusteredFLNC.out.bam)
-            .join(pbmm2_align_refinedFLNC.out.bam)
-            | map { meta, refinedBam, refinedPbi, clusteredBam, clusteredPbi, refinedPbmm2BAM,refinedPbmm2BAI -> 
-                    tuple(meta, [
-                        refinedBAM: refinedBam,
-                        refinedPBI: refinedPbi,
-                        clusteredBAM: clusteredBam,
-                        clusteredPBI: clusteredPbi,
-                        refinedPbmm2BAM:refinedPbmm2BAM, 
-                        refinedPbmm2BAI:refinedPbmm2BAI
-                         ])
-                    }
-            | set { isoseq_pbmm2_joined }
-
-        isoseq_collapse(isoseq_pbmm2_joined)
-
-
-
-
-        // assemble the canonical preprocess map (keys consumed downstream)
-        isoseq_refine_cluster.out.isoseq_flnc_refined
-            .join(isoseq_refine_cluster.out.refine_report_json)
-            .join(isoseq_refine_cluster.out.isoseq_flnc_clustered)
-            .join(pbmm2_align_clusteredFLNC.out.bam)
-            .join(isoseq_collapse.out.collapsed_gff)
-            .join(pbmm2_align_refinedFLNC.out.bam)
-            | map { meta, rb, rp, refine_json, cb, cp, pb, pi, gff, counts, abund,pbbm2_r, pbbm2_i ->
-                tuple(meta, [
-                    refinedBAM:   rb, refinedPBI:   rp,
-                    clusteredBAM: cb, clusteredPBI: cp,
-                    clusteredPbmm2BAM:     pb, clusteredPbmm2BAI:     pi,
-                    collapsedGFF: gff, flncCounts:  counts, flncAbundance: abund,
-                    refinedPbmm2BAM: pbbm2_r, refinedPbmm2BAI: pbbm2_i,
-                    refineReportJSON: refine_json
-                ])
-            }
-            | set { preprocess_all_joined }
+            .set { preprocess_all_joined }
+   
     emit:
         preprocessFullOutput = preprocess_all_joined
-        // (meta, bam, bai) aligned refined FLNC BAM — per-molecule, for RNA_HAPLOTAG/ASE
-        isoseqForSummary    = isoseq_refine_cluster.out.refine_report_json
+        isoseqForSummary     = isoseq_refine_cluster.out.refine_report_json
+        readStat             = isoseq_collapse.out.read_stat
         refinedAlignedBam    = pbmm2_align_refinedFLNC.out.bam
+        
+
 }
 
 workflow RNA_TRANSCRIPTOME {
@@ -676,10 +628,11 @@ workflow RNA_TRANSCRIPTOME {
         oarFish(preprocessFullOutput)
 
     emit:
-        classification = pigeon_classify.out.classification   // filtered_lite classification
-        sortedGFF      = pigeon_classify.out.sortedGFF        // for ISA importGTF (splicing)
-        pigeon         = pigeon_classify.out.pigeon
-        sqanti3        = sqanti3_QC.out.sqanti3QC
+        classification      = pigeon_classify.out.classification_unfiltered
+        classification_lite = pigeon_classify.out.classification   // filtered_lite classification
+        sortedGFF           = pigeon_classify.out.sortedGFF        // for ISA importGTF (splicing)
+        pigeon              = pigeon_classify.out.pigeon
+        sqanti3             = sqanti3_QC.out.sqanti3QC
         pigeonForSummary    = pigeon_classify.out.pigeon_reports_json
 }
 
@@ -850,7 +803,7 @@ workflow INTEGRATION {
  * ========================================================================== */
 log.info """\
 ======================================================
-KG Vejle: PacBio LRS  DNA(somatic) + RNA(Kinnex)  v2
+KG Vejle: PacBio LRS  DNA(T-N somatic) + RNA(Kinnex)  v2
 ======================================================
 Genome        : ${params.genome}
 Genome FASTA  : ${params.genome_fasta}

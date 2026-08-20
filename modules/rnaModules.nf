@@ -105,7 +105,9 @@ process pbmm2_align_clusteredFLNC {
     tuple val(meta), path(bam), path(pbi)
     
     output:
-    tuple val(meta), path("${meta.prefixRNA}.clustered.pbmm2.bam"), path("${meta.prefixRNA}.clustered.pbmm2*bai"),  emit: bam
+    tuple val(meta), 
+        path("${meta.prefixRNA}.clustered.pbmm2.bam"),
+        path("${meta.prefixRNA}.clustered.pbmm2*bai"),  emit: bam
  
     script:
     """
@@ -167,7 +169,7 @@ process isoseq_collapse {
     tuple val(meta),
         path("${meta.prefixRNA}.refinedFLNC.collapsed.gff"),
         path("${meta.prefixRNA}.refinedFLNC.collapsed.flnc_count.txt"),
-        path("${meta.prefixRNA}.refinedFLNC.collapsed.abundance.txt"), emit: collapsed_gff
+        path("${meta.prefixRNA}.refinedFLNC.collapsed.abundance.txt"), emit: collapsed_list
     
     tuple val(meta),
         path("${meta.prefixRNA}.refinedFLNC.collapsed.read_stat.txt"), emit: read_stat
@@ -200,7 +202,7 @@ process pigeon_classify {
     tuple val(meta), 
         path("*.filtered_lite_classification.txt"),  emit: classification
 
-tuple val(meta), 
+    tuple val(meta), 
         path("*.pigeon_classification.txt"),         emit: classification_unfiltered
 
     tuple val(meta),
@@ -209,6 +211,7 @@ tuple val(meta),
     tuple val(meta),
         path("*.filtered.report.json"),
         path("*.pigeon.report.json"),                emit: pigeon_reports_json
+   
     script:
     """
     cp ${data.collapsedGFF} ${meta.prefixRNA}.pbmm2.collapsed.gff 
@@ -234,7 +237,7 @@ tuple val(meta),
 
     """
 }
-    //${params.pigeon_gtf} \
+
 process sqanti3_QC {
     label "high"
     tag "$meta.id"
@@ -280,18 +283,18 @@ process pbfusion {
     
     output:
     tuple val(meta), path("*.{pdf,bed,txt,vcf,idx}"),  emit: fusion
-    tuple val(meta), path("${meta.prefixRNA}.PBfusion.INHOUSE.txt"),  emit: inhouse_fusion 
+    tuple val(meta), path("${meta.prefixRNA}.refinedBAM.PBfusion.INHOUSE.txt"),  emit: inhouse_fusion 
     script:
     //def (refined_bam,refined_pbi,pbmm2_bam,pbmm2_bai) = data
     """
     pbfusion discover \
-    -b ${data.clusteredPbmm2BAM} \
+    -b ${data.refinedBAM} \
     --threads ${task.cpus} \
     --gtf ${params.gencode_gtf} \
-    --min-coverage 4 \
-    -o  ${meta.prefixRNA}.fusion
+    --min-coverage 2 \
+    -o  ${meta.prefixRNA}.refinedBAM.fusion
 
-    cat  ${meta.prefixRNA}.fusion.breakpoints.groups.bed| grep -w -f ${params.inhouse_fusionGenelist} > ${meta.prefixRNA}.PBfusion.INHOUSE.txt
+    cat  ${meta.prefixRNA}.refinedBAM.fusion.breakpoints.groups.bed| grep -w -f ${params.inhouse_fusionGenelist} > ${meta.prefixRNA}.refinedBAM.PBfusion.INHOUSE.txt
 
     """
 }
