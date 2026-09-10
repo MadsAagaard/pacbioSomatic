@@ -58,7 +58,7 @@ process isoseq_refine_cluster {
     tag "$meta.id"
     conda "${params.isoseq_pbtk}"
     
-    publishDir {"${meta.id}/toolsOutputRNA/isoseq/refine_cluster/"}, mode: 'copy', pattern: '*.bam'
+    //publishDir {"${meta.id}/toolsOutputRNA/isoseq/refine_cluster/"}, mode: 'copy', pattern: '*.bam'
 
     input:
     tuple val(meta), path(data)
@@ -128,7 +128,7 @@ process pbmm2_align_refinedFLNC {
     tag "$meta.id"
     conda "${params.pbmm2}"
 
-    publishDir {"${meta.id}/alignments/"}, mode: 'copy', pattern: '*.pbmm2.*'
+    //publishDir {"${meta.id}/alignments/"}, mode: 'copy', pattern: '*.pbmm2.*'
     
     input:
     tuple val(meta), path(bam), path(pbi)
@@ -179,8 +179,8 @@ process isoseq_collapse {
     """
     isoseq collapse \
     --do-not-collapse-extra-5exons \
-    ${data.refinedPbmm2BAM} \
-    ${data.refinedBAM}\
+    ${data.refinedBAM} \
+    ${data.refinedFLNC}\
     ${meta.prefixRNA}.refinedFLNC.collapsed.gff
     """
 }
