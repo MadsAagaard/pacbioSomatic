@@ -161,12 +161,15 @@ process sawFish2{
     tuple val(meta), path("${meta.prefixNormal}.sawfishSV.supporting_reads.json.gz"), emit: sv_supporting_reads
 
     script:
+    def sex = meta.gender=="M"? "--expected-cn ${params.sawfishExpectedCnXY}" : "--expected-cn ${params.sawfishExpectedCnXX}"
+
     """
     sawfish discover \
     --threads ${task.cpus} \
     --ref ${params.genome_fasta} \
     --bam ${data.bamNormal} \
     --cnv-excluded-regions ${params.cnv_exclude_sawfish} \
+    $sex \
     --output-dir ${meta.npnNormal}.normal.sawfishDiscover 
 
     sawfish joint-call \
