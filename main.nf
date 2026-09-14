@@ -625,7 +625,7 @@ workflow RNA_TRANSCRIPTOME {
     main:
         pigeon_classify(preprocessFullOutput)
         sqanti3_QC(preprocessFullOutput)
-        oarFish(preprocessFullOutput)
+        //oarFish(preprocessFullOutput)
 
     emit:
         classification      = pigeon_classify.out.classification_unfiltered
