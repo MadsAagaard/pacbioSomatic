@@ -1183,7 +1183,7 @@ process wakhan {
     --out-dir-plots wakhan
 
     mv wakhan/solutions_ranks.tsv wakhan/${meta.prefixTN}.wakhan.solutions_ranks.tsv
-    mv wakhan/solution_1/vcf_output/*_integers.vcf .
+    cp wakhan/solution_1/vcf_output/*_integers.vcf .
     bgzip *_integers.vcf
     tabix -p vcf *_integers.vcf.gz
     """
