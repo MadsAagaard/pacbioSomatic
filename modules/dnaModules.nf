@@ -752,7 +752,8 @@ process purple {
 
     publishDir "${meta.id}/toolsOutputDNA/hmftools/", mode: 'copy'
     //publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: "*.purity.tsv"
-    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: "*.segment.tsv"
+    //publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: "*.segment.tsv"
+    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: "*.cnv.somatic.tsv"
     publishDir "${meta.id}/TUMORBOARDFILES/plots/", mode: 'copy', pattern: "*.{html,png}"
     //publishDir "${outputDir}/${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: "*.circos.png"
     //publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: "*.driver.catalog.somatic.tsv"
@@ -1151,7 +1152,7 @@ process wakhan {
     conda "${params.wakhan}"  // needs pyyaml, pandas, python-calamine
     publishDir "${meta.id}/toolsOutputDNA/", mode: 'copy'
     publishDir "${meta.id}/TUMORBOARDFILES/plots/", mode: 'copy', pattern: "*.copynumbers_breakpoints*"
-    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: "*_integers.vcf"
+    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: "*_integers.vcf.*"
 
     input:
     tuple val(meta), val(data)
@@ -1182,6 +1183,9 @@ process wakhan {
     --out-dir-plots wakhan
 
     mv wakhan/solutions_ranks.tsv wakhan/${meta.prefixTN}.wakhan.solutions_ranks.tsv
+    mv wakhan/solution_1/vcf_output/*_integers.vcf .
+    bgzip *_integers.vcf
+    tabix -p vcf *_integers.vcf.gz
     """
 }
 
