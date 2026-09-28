@@ -161,12 +161,15 @@ process sawFish2{
     tuple val(meta), path("${meta.prefixNormal}.sawfishSV.supporting_reads.json.gz"), emit: sv_supporting_reads
 
     script:
+    def sex = meta.gender=="M"? "--expected-cn ${params.sawfishExpectedCnXY}" : "--expected-cn ${params.sawfishExpectedCnXX}"
+
     """
     sawfish discover \
     --threads ${task.cpus} \
     --ref ${params.genome_fasta} \
     --bam ${data.bamNormal} \
     --cnv-excluded-regions ${params.cnv_exclude_sawfish} \
+    $sex \
     --output-dir ${meta.npnNormal}.normal.sawfishDiscover 
 
     sawfish joint-call \
@@ -200,7 +203,8 @@ process svdb_SawFish {
     publishDir "${params.lrsStorageBase}/sawfish/", mode: 'copy',pattern: "*.sawfishSV.hiphase.svdb.vcf*"
 
     publishDir {"${meta.id}/toolsOutputDNA/sawFish/"}, mode: 'copy', pattern: "*.sawfishSV.hiphase.svdb.*"
-    publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: '*.sawfishSV.hiphase.svdb.vcf*'
+   // publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: '*.sawfishSV.hiphase.svdb.vcf*'
+    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: '*.sawfishSV.hiphase.svdb.vcf*'
 
     input:
     tuple val(meta), val(data)
@@ -232,7 +236,7 @@ process hiPhase {
 
     publishDir "${meta.id}/alignments/", mode: 'copy', pattern: "*.hiphase.ba*"
     publishDir "${meta.id}/toolsOutputDNA/deepVariant/", mode: 'copy', pattern: "*.hiphase.deepvariant.*"
-    publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: '*.hiphase.deepvariant.*'
+    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: '*.hiphase.deepvariant.*'
     //publishDir "${meta.id}/toolsOutputDNA/sawfish_supporting_data/", mode: 'copy', pattern: "*.hiphase.sawfishSV.*"
 
     input:
@@ -558,7 +562,7 @@ process deepSomatic {
 process deepSomatic_edits {
     label "low"
     publishDir "${meta.id}/toolsOutputDNA/deepSomatic/", mode: 'copy'
-    publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: '*.normalAdded.*'
+    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: '*.normalAdded.*'
     input:
     tuple val(meta), val(data)
     
@@ -632,6 +636,7 @@ process severus {
     --vntr-bed ${params.vntr_severus} \
     --phasing-vcf ${data.dv_vcf} \
     --threads ${task.cpus} \
+    --use-supplementary-tag \
     --out-dir ${meta.prefixTN}.severus
 
     mv ${meta.prefixTN}.severus/somatic_SVs/severus_somatic.vcf ${meta.prefixTN}.severusSomaticSV.vcf    
@@ -644,7 +649,7 @@ process severus_edits {
     tag "$meta.id"
     
     publishDir "${meta.id}/toolsOutputDNA/severus_somaticSV/", mode: 'copy'
-    publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: '*.normalAdded.*'
+    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: '*.normalAdded.*'
     
     input:
     tuple val(meta), path(data) // severus output vcf
@@ -747,8 +752,9 @@ process purple {
 
     publishDir "${meta.id}/toolsOutputDNA/hmftools/", mode: 'copy'
     //publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: "*.purity.tsv"
-    publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: "*.segment.tsv"
-    publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: "*.{html,png}"
+    //publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: "*.segment.tsv"
+    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: "*.cnv.somatic.tsv"
+    publishDir "${meta.id}/TUMORBOARDFILES/plots/", mode: 'copy', pattern: "*.{html,png}"
     //publishDir "${outputDir}/${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: "*.circos.png"
     //publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: "*.driver.catalog.somatic.tsv"
 
@@ -914,7 +920,7 @@ process hrd_scores {
     """
 }
 
-process scarhrd {
+process scarhrd_purple {
     label "low"
     tag "$meta.id"
     conda "${params.scarhrd}"
@@ -926,56 +932,100 @@ process scarhrd {
     // purpleCNV: purple *.purple.cnv.somatic.tsv (from purple.out.purple_pass_for_hrd)
 
     output:
-    tuple val(meta), path("${meta.prefixTN}.scarHRD.txt"),         emit: scarhrd_full
-    tuple val(meta), path("${meta.prefixTN}.scarHRD.summary.txt"), emit: for_yaml_summary
+    tuple val(meta), path("${meta.prefixTN}.purple.scarHRD.txt"),         emit: scarhrd_full
+    tuple val(meta), path("${meta.prefixTN}.purple.scarHRD.summary.txt"), emit: for_yaml_summary
 
     script:
     """
     Rscript ${params.scarhrd_Rscript} \
-        $purpleCNV \
-        ${meta.npnTumor} \
-        ${meta.prefixTN}
+        --input  $purpleCNV \
+        --sample ${meta.npnTumor} \
+        --out    ${meta.prefixTN}.purple
     """
 }
-
-
 
 /*
-process hrdetect_hrd {
+process scarhrd_wakhan {
     label "low"
     tag "$meta.id"
-    conda "${params.hrdetect}"
-
-    publishDir "${meta.id}/toolsOutputDNA/HRD/",        mode: 'copy'
-    publishDir "${meta.id}/TUMORBOARDFILES/DNA/",    mode: 'copy', pattern: "*.hrdetect.summary.txt"
+    conda "${params.scarhrd}"
+    publishDir "${meta.id}/toolsOutputDNA/scarHRD/", mode: 'copy'
 
     input:
-    tuple val(meta), val(data)
-    // data.deepSomaticVCF  : deepSomatic PASS VCF
-    // data.severusVCF      : severus somatic SV VCF (normalAdded)
-    // data.purpleCNV       : purple CNV somatic TSV
+    tuple val(meta), path(wakhanVCF)
 
     output:
-    tuple val(meta), path("${meta.prefixTN}.hrdetect.txt"),         emit: hrdetect_full
-    tuple val(meta), path("${meta.prefixTN}.hrdetect.summary.txt"), emit: hrdetect_summary
+    tuple val(meta), path("${meta.prefixTN}.wakhan.scarHRD.txt"),         emit: scarhrd_full
+    tuple val(meta), path("${meta.prefixTN}.wakhan.scarHRD.summary.txt"), emit: for_yaml_summary
 
     script:
-
+    def wakhanPloidy = meta.wakhanPloidy ?: 'NA'
+    def mincnq = params.scarhrd_wakhan_minCNQ ? "--min-cnq ${params.scarhrd_wakhan_minCNQ}" : ""
     """
-    # Step 1: convert severus VCF to BEDPE
-    bash ${params.hrdetect_bedpe_script} ${data.severusVCF} ${meta.prefixTN}.severus.bedpe
+    python3 ${params.wakhan_scarhrd_py} \
+        --vcf ${wakhanVCF} \
+        --sample ${meta.npnTumor} \
+        --out ${meta.prefixTN}.wakhan.scarHRD_input.tsv \
+        ${mincnq}
 
-    # Step 2: run HRDetect
-    Rscript ${params.hrdetect_Rrscript} \
-        ${data.deepSomaticVCF} \
-        ${meta.prefixTN}.severus.bedpe \
-        ${data.purpleCNV} \
-        ${meta.npnTumor} \
-        ${meta.prefixTN}
+    Rscript ${params.scarhrd_Rscript} \
+        --input  ${meta.prefixTN}.wakhan.scarHRD_input.tsv \
+        --sample ${meta.npnTumor} \
+        --out    ${meta.prefixTN}.wakhan \
+        --source table \
+        --ploidy ${wakhanPloidy}
+    """
+}
+*/
+
+/* scarHRD on the Wakhan haplotype BEDs (v2 converter).
+   Runs alongside scarhrd_wakhan (v1, integers VCF) — different input
+   segmentation, so the two are NOT expected to agree. */
+process scarhrd_wakhan_bed {
+    label "low"
+    tag "$meta.id"
+    conda "${params.scarhrd}"
+
+    publishDir "${meta.id}/toolsOutputDNA/scarHRD/", mode: 'copy'
+
+    input:
+    tuple val(meta), path(bedHP1), path(bedHP2)
+
+    output:
+    tuple val(meta), path("${meta.prefixTN}.wakhanBED.scarHRD.txt"),
+                     path("${meta.prefixTN}.wakhanBED.segmentationReport.json"), emit: for_yaml_summary
+    tuple val(meta), path("${meta.prefixTN}.wakhanBED.scarHRD_input.tsv"),   emit: seg_table
+    tuple val(meta), path("${meta.prefixTN}.wakhanBED.scarHRD_filters.txt"), emit: filter_report
+    tuple val(meta), path("${meta.prefixTN}.wakhanBED.dropped.bed"),         emit: dropped_bed
+    tuple val(meta), path("${meta.prefixTN}.wakhanBED.segmentationReport.json"), emit: summary_json
+    script:
+    def wakhanPloidy = meta.wakhanPloidy ?: 'NA'
+    def mincnq = params.scarhrd_wakhanBed_minCNQ     != null ? "--min-cnq ${params.scarhrd_wakhanBed_minCNQ}"          : ""
+    def mincov = params.scarhrd_wakhanBed_minCovFrac != null ? "--min-cov-frac ${params.scarhrd_wakhanBed_minCovFrac}" : ""
+    def minlen = params.scarhrd_wakhanBed_minSegLen  != null ? "--min-length ${params.scarhrd_wakhanBed_minSegLen}"    : ""
+    def excl   = (params.scarhrd_wakhanBed_excludeBeds ?: []).collect { return "--exclude-bed ${it}" }.join(' ')
+    """
+    python3 ${params.wakhan_scarhrd_bed_py} \
+        --bed-hp1     ${bedHP1} \
+        --bed-hp2     ${bedHP2} \
+        --sample      ${meta.npnTumor} \
+        --out         ${meta.prefixTN}.wakhanBED.scarHRD_input.tsv \
+        --report      ${meta.prefixTN}.wakhanBED.scarHRD_filters.txt \
+        --dropped-bed ${meta.prefixTN}.wakhanBED.dropped.bed \
+        --report-json ${meta.prefixTN}.wakhanBED.segmentationReport.json \
+        ${excl} ${mincnq} ${mincov} ${minlen}
+
+    Rscript ${params.scarhrd_Rscript} \
+        --input  ${meta.prefixTN}.wakhanBED.scarHRD_input.tsv \
+        --sample ${meta.npnTumor} \
+        --out    ${meta.prefixTN}.wakhanBED \
+        --source table \
+        --ploidy ${wakhanPloidy}
     """
 }
 
-*/
+
+
 process pcgr_v212_deepSomatic {
     tag "$meta.id"
     label 'medium'
@@ -1057,7 +1107,9 @@ process collect_clinical_summary {
         --wakhan             ${data.wakhan} \
         --hrdetect-json      ${data.hrdetectJson} \
         --chord-json         ${data.chordJson} \
-        --scarhrd            ${data.scarhrd} \
+        --scarhrd-purple     ${data.scarhrd} \
+        --scarhrd-wakhan     ${data.scarhrd_wakhan_txt} \
+        --scarhrd-wakhan-report-json ${data.scarhrd_wakhan_json} \
         --mutpattern-snv2020 ${data.snv2020Json} \
         --mutpattern-snv2015 ${data.snv2015Json} \
         --mutpattern-indel   ${data.indelJson} \
@@ -1073,7 +1125,7 @@ process purple_genome_view {
     tag "$meta.id"
     conda "${params.somaticSummaryEnv}"  // needs pyyaml, pandas, python-calamine
    
-    publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy'
+    publishDir "${meta.id}/TUMORBOARDFILES/plots/", mode: 'copy'
 
     input:
     tuple val(meta), val(data)
@@ -1099,6 +1151,8 @@ process wakhan {
     tag "$meta.id"
     conda "${params.wakhan}"  // needs pyyaml, pandas, python-calamine
     publishDir "${meta.id}/toolsOutputDNA/", mode: 'copy'
+    publishDir "${meta.id}/TUMORBOARDFILES/plots/", mode: 'copy', pattern: "*.copynumbers_breakpoints*"
+    publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: "*_integers.vcf.*"
 
     input:
     tuple val(meta), val(data)
@@ -1106,6 +1160,14 @@ process wakhan {
     output:
     tuple val(meta), path("wakhan/"), emit: wakhanDir
     tuple val(meta), path("wakhan/${meta.prefixTN}.wakhan.solutions_ranks.tsv"), emit: wakhanTSV
+
+    tuple val(meta), path("wakhan/solution_1/vcf_output/*_cna_integers.vcf"), emit: vcf
+    tuple val(meta),
+          path("wakhan/solution_1/bed_output/*_copynumbers_segments_HP_1.bed"),
+          path("wakhan/solution_1/bed_output/*_copynumbers_segments_HP_2.bed"), emit: cnBed
+
+    tuple val(meta), path("wakhan/solution_1/*_copynumbers_breakpoints*"), emit: plots
+
     script:
     """
     wakhan all \
@@ -1115,14 +1177,40 @@ process wakhan {
     --normal-phased-vcf ${data.dv_vcf} \
     --breakpoints ${data.severusVCF} \
     --pdf-enable \
+    --ploidy-range ${params.wakhan_ploidy_range} \
+    --purity-range ${params.wakhan_purity_range} \
+    --genome-name ${meta.prefixTN}.wakhan \
     --out-dir-plots wakhan
 
     mv wakhan/solutions_ranks.tsv wakhan/${meta.prefixTN}.wakhan.solutions_ranks.tsv
+    cp wakhan/solution_1/vcf_output/*_integers.vcf .
+    bgzip *_integers.vcf
+    tabix -p vcf *_integers.vcf.gz
     """
 }
 
 
+process alignmentLinks_tumorboard {
+    label 'low'
+    tag  "$meta.id"
 
+    input:
+    tuple val(meta), val(bamName), val(baiName)
+
+    output:
+    tuple val(meta), val(bamName), emit: linked   // token; keeps it in the DAG
+
+    script:
+    def realDir = "${launchDir}/${meta.id}/alignments"
+    def tbDir   = "${launchDir}/${meta.id}/${params.tumorboard_align_subdir}"
+    """
+    mkdir -p '${tbDir}'
+    for f in '${bamName}' '${baiName}'; do
+        rel=\$(realpath -ms --relative-to='${tbDir}' "${realDir}/\$f")
+        ln -sf "\$rel" "${tbDir}/\$f"
+    done
+    """
+}
 
 
 
