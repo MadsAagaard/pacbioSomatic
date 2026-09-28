@@ -10,13 +10,6 @@ runID="${date}.${user}"
 
 //////////////////////////// SWITCHES ///////////////////////////////// 
 
-
-// OUTPUT locations:
-
-//lrsStorage="/lnx01_data3/storage/pacBioLRS/analyzedData/${params.assembly}/SOMATIC/"
-
-
-
 /* --------------------------------- NAMING --------------------------------- 
 
 single sample (preprocess, deepvariant, sawfish, hiphase, QC):
@@ -25,19 +18,12 @@ ${meta.npn}.${meta.sampletype}.${params.genome_version}.{toolname}.{filetype}
 
 metadata: [id, npnNormal, npnTumor, pcgr, type, npn]
 
-
-
-
 T-N analysis (all somatic analysis requiring both T and N sample):
 ${meta.prefixTN}.{toolname}.{filetype}
 
 Metadata: [id, npn, npnNormal, npnTumor, pcgr]
 metamap can (should!) be used for joining
-
-
 */
-
-
 
 
 ///////////////////////////////////////////////////////////////////
@@ -410,23 +396,6 @@ process methBatNEW_profile_single {
     
     """
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//// WORKINPROGRESS
 
 ///////////////////////////////////////////////////////////////////
 /////////////////// --- QC processes --- //////////////////////////
@@ -836,36 +805,6 @@ process owl_msi {
     """
 }
 
-/*
-process chord_hrd {
-    label "low"
-    tag "$meta.id"
-    conda "${params.chord}"
-
-    publishDir "${meta.id}/toolsOutputDNA/CHORD_HRD/", mode: 'copy'
-    //publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: "*.chord_hrd.summary.txt"
-
-    input:
-    tuple val(meta), path(data)
-    // data.deepSomaticVCF  : deepSomatic PASS VCF (from deepSomatic_edits)
-    // data.severusVCF      : severus somatic SV VCF (from severus_edits)
-
-    output:
-    tuple val(meta), path("${meta.prefixTN}.chord_hrd.txt"),         emit: chord_full
-    tuple val(meta), path("${meta.prefixTN}.chord_hrd.summary.txt"), emit: for_yaml_summary
-
-    script:
-    def (deepSomaticVCF, severusVCF) = data
-
-    """
-    Rscript ${params.chord_Rscript} \
-        $deepSomaticVCF \
-        $severusVCF \
-        ${meta.npnTumor} \
-        ${meta.prefixTN}
-    """
-}
-*/
 process hrd_scores {
     label "low"
     tag "$meta.id"
@@ -1213,49 +1152,6 @@ process alignmentLinks_tumorboard {
 }
 
 
-
-
-
-
-
-/*
-process owl_msi {
-    label "low"
-    tag "$meta.id"
-    conda "${params.owl}"
-
-    publishDir "${meta.id}/toolsOutputDNA/MSI/", mode: 'copy'
-
-    input:
-    tuple val(meta), val(data)
-
-    output:
-    tuple val(meta), path("*.txt"), emit: owl_msi
-
-    script:
-    """
-    ${params.owl} profile \
-    --bam ${data.bamTumor} \
-    --regions ${params.owl_markers} \
-    --sample ${meta.npnT} > ${meta.prefixTumor}.owlMSI.txt
-
-    ${params.owl} score \
-    --file ${meta.prefixTumor}.owlMSI.txt \
-    --prefix ${meta.prefixTumor}_MSI
-
-    ${params.owl} profile \
-    --bam ${data.bamNormal} \
-    --regions ${params.owl_markers} \
-    --sample ${meta.npnNormal} > ${meta.prefixNormal}.owlMSI.txt
-
-    ${params.owl} score \
-    --file  ${meta.prefixNormal}.owlMSI.txt \
-    --prefix ${meta.prefixNormal}_MSI
-    """
-}
-
-
-*/
 
 
 
