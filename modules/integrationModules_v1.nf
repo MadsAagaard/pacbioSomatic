@@ -4,11 +4,7 @@ nextflow.enable.dsl = 2
 /*
 ================================================================================
  integrationModules.nf   (cross-arm DNA <-> RNA integration)
-   methylation_expression : T-vs-N promoter differential methylation x RNA expr
-   fusion_sv_concordance  : RNA pbfusion breakpoints vs DNA somatic SV breakpoints
-
  House convention: file inputs travel inside a val(data) map as absolute paths
- (not Nextflow-staged); conda tasks read them on the shared FS.
 ================================================================================
 */
 
@@ -48,12 +44,6 @@ process alignmentLinks_tumorboard {
 */
 
 
-/* ----------------------------------------------------------------------------
- * methylation_expression
- * Promoter (TSS-window, from gencode GTF) methylation in tumour vs normal
- * (pb-CpG-tools combined bedMethyl) joined to RNA gene-level FL counts.
- * Flags hyperMeth_silenced (MGMT/MLH1/CDKN2A-type) and hypoMeth_expressed.
- * -------------------------------------------------------------------------- */
 process methylation_expression {
     label 'low'
     tag "$meta.id"
@@ -91,11 +81,6 @@ process methylation_expression {
 }
 
 
-/* ----------------------------------------------------------------------------
- * fusion_sv_concordance
- * Each RNA fusion breakpoint pair vs ANY DNA somatic SV breakpoint (severus)
- * within --window bp -> DNA_corroborated / partial / RNA_only.
- * -------------------------------------------------------------------------- */
 process fusion_sv_concordance {
     label 'low'
     tag "$meta.id"

@@ -467,16 +467,6 @@ process collect_clinical_summaryRNA {
 }
 
 
-//  --pcgr-code          ${meta.pcgr} \
-
-/* ----------------------------------------------------------------------------
- * ase_readcounter — allele-specific expression on the tumour RNA.
- *   run 1: germline biallelic het SNPs from the NORMAL (constitutional baseline,
- *          avoids tumour CNV/LOH artefacts) -> genome-wide allelic imbalance
- *   run 2: somatic SNVs (DeepSomatic PASS, tumour-only) -> is the mutant allele
- *          transcribed / preferentially expressed / NMD-degraded
- * Self-contained (GATK ASEReadCounter + bcftools). No external R.
- * -------------------------------------------------------------------------- */
 process ase_readcounter {
     label 'medium'
     tag "$meta.id"
@@ -527,12 +517,6 @@ process ase_readcounter {
 
 
 /* ----------------------------------------------------------------------------
- * expression_outlier — n=1 "DE": gene-level FL counts vs a background cohort.
- * WRAPPER around your existing expression_outlier.R (from the somatic-RNA chat).
- * Emits <sample>.geneCounts.tsv to a shared cohort dir so the background grows.
- *
- * [INFER] CLI below is reconstructed from the handoff. Reconcile with the
- *         script's actual argparse before first run.
  * -------------------------------------------------------------------------- */
 process expression_outlier {
     label 'low'
@@ -564,12 +548,7 @@ process expression_outlier {
 
 
 /* ----------------------------------------------------------------------------
- * splicing_isoformswitch — exon skipping etc. via IsoformSwitchAnalyzeR in
- * ANNOTATION-ONLY mode (n=1: no switch test). WRAPPER around your existing
- * isoformSwitch_singleSample.R (from the somatic-RNA chat).
- *
- * [INFER] CLI below is reconstructed from the handoff. Reconcile with the
- *         script's actual argparse before first run.
+
  * -------------------------------------------------------------------------- */
 process splicing_isoformswitch {
     label 'medium'

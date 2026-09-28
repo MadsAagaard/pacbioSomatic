@@ -8,13 +8,9 @@ nextflow.enable.dsl = 2
 --------------------------------------------------------------------------------
  Samplesheet (tab-sep, >=6 cols; header optional):
    caseID  DNAnormalSampleID  DNAtumorSampleID  RNAtumorSampleID  gender  pcgrCode
-   RNAtumorSampleID may be empty / NA / - / .   -> that case is DNA-only.
+
    --skipRNA disables the RNA arm globally regardless of the samplesheet.
 
- Entry points (-entry):
-   FULL   (default)  DNA + RNA + INTEGRATION      [RNA/INTEGRATION wired next]
-   DNA               DNA arm only
-   RNA               RNA arm only                 [wired next]
 ================================================================================
 */
 
@@ -26,7 +22,6 @@ runID = "${date}.${user}"
 // -------------------------- naming (single source) ---------------------------
 //def samplePrefix = { npn, sampletype -> "${npn}.${sampletype}.${params.genome_version}.${params.readSet}" }
 
-// ---- shared pcgr tag helper (define BEFORE the prefix closures) ----
 def pcgrTag = { pcgr ->
     def code = pcgr?.toString()?.trim()
     (code && !(code.toLowerCase() in ['', 'na', '-', '.', 'null'])) ? ".pcgr_${code}" : ''
@@ -45,7 +40,7 @@ def isMissing = { v -> (v == null) || (v.toString().trim().toLowerCase() in ['',
 
 
 /*
-
+Deprecated - for now... 
 def samplePrefix = { npn, sampletype, pcgr = null ->
     def code    = pcgr?.toString()?.trim()
     def useCode = code && !(code.toLowerCase() in ['', 'na', '-', '.', 'null'])
@@ -55,13 +50,13 @@ def samplePrefix = { npn, sampletype, pcgr = null ->
 
 def tnPrefix     = { id  -> "${id}.${params.genome_version}.${params.readSet}" }
 
-//def rnaPrefix    = { id, npn            -> "${npn}.${params.genome_version}.rna" }
+def rnaPrefix    = { id, npn            -> "${npn}.${params.genome_version}.rna" }
 
 def isMissing = { v -> (v == null) || (v.toString().trim().toLowerCase() in ['', 'na', '-', '.', 'null']) }
 */
 
 /* =============================================================================
- *  RAW INPUT GLOBS  (two arms, two filename grammars)
+ *  RAW INPUT GLOBS 
  * ========================================================================== */
 
 // ---- DNA ubams: <archive>/**/<npn>...hifi_reads[.allReads].bam ----
@@ -78,7 +73,7 @@ def rnaInputBam = params.inputRNA ? "${params.inputRNA}/**/*.lima.*.bam"
 
 
 /* =============================================================================
- *  UBAM CHANNELS  (keyed by sample npn, grouped over multiple movies)
+ *  UBAM CHANNELS 
  * ========================================================================== */
 
 Channel.fromPath(dnaInputBam, followLinks: true)
@@ -104,7 +99,7 @@ Channel.fromPath(rnaInputBam, followLinks: true)
 
 
 /* =============================================================================
- *  SAMPLESHEET  ->  one enriched meta per case  ->  keyed views
+ *  SAMPLESHEET  
  * ========================================================================== */
 
 if (!params.samplesheet) { exit 1, "ERROR: --samplesheet is required (caseID, DNAnormal, DNAtumor, RNAtumor, gender, pcgr)" }
@@ -134,7 +129,7 @@ Channel.fromPath(params.samplesheet)
     }
     | set { cases_ch }
 
-// keyed views
+
 cases_ch | map { meta -> [meta.npnNormal, meta] } | set { ss_normal_ch }
 cases_ch | map { meta -> [meta.npnTumor,  meta] } | set { ss_tumor_ch  }
 
@@ -221,7 +216,7 @@ include {
 } from './modules/rnaModules.nf'
 
 
-// ---- cross-arm integration (methylation x expression, fusion x SV)
+// TO DO:
 include {
     methylation_expression;
     fusion_sv_concordance;
@@ -438,28 +433,8 @@ workflow DNA_SOMATIC {
             | map { meta, j -> [meta.id, meta.sampletype, j] } | groupTuple(by: 0)
             | map { id, st, js -> [id, js[st.indexOf('normal')], js[st.indexOf('tumor')]] }
             | set { methbat_for_yaml_ch }
-/*
-        amber.out.for_yaml_summary
-            | map { meta, amberQC, amberBAF -> [meta.id, meta, amberQC, amberBAF] }
-            | join( purple.out.for_yaml_summary | map { meta, pur, dr, cnv -> [meta.id, pur, dr, cnv] } )
-            | join( chord_hrd.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
-            | join( scarhrd.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
-            | join( pcgr_v212_deepSomatic.out.for_yaml_summary | map { meta, f -> [meta.id, f] } )
-            | join( wakhan.out.wakhanTSV | map { meta, f -> [meta.id, f] } )
-            | join( methbat_for_yaml_ch )
-            | join( owl_for_yaml_ch )
-            | join( cramino_for_yaml_ch )
-            | map { id, meta, amberQC, amberBAF, pur, driver, cnv, chord, scar, pcgr, wak, mb_n, mb_t, owl_n, owl_t, cr_n, cr_t ->
-                tuple(meta, [
-                    amberQC: amberQC, amberBAF: amberBAF,
-                    purple_purity: pur, purple_driver: driver, purple_cnv: cnv,
-                    chord: chord, scarhrd: scar, pcgr: pcgr, wakhan: wak,
-                    methbat_n: mb_n, methbat_t: mb_t, owl_n: owl_n, owl_t: owl_t,
-                    cramino_n: cr_n, cramino_t: cr_t
-                ])
-            }
-            | set { for_summary_final_ch }
-*/
+
+
         amber.out.for_yaml_summary
             | map { meta, amberQC, amberBAF -> [meta.id, meta, amberQC, amberBAF] }
             | join( purple.out.for_yaml_summary | map { meta, pur, dr, cnv -> [meta.id, pur, dr, cnv] } )
@@ -524,7 +499,7 @@ workflow DNA_SOMATIC {
 
 
 /* =============================================================================
- *  DNA ARM (composed) — reusable by FULL and DNA entry points
+ *  DNA ARM overall: 
  * ========================================================================== */
 workflow DNA_ARM {
     take: per_sample_ch
@@ -546,9 +521,8 @@ workflow DNA_ARM {
  * ========================================================================== */
 
 workflow RNA_PREPROCESS {
-    take: rna_ch                         // (meta, bams)  bams = grouped list (>=1 movie)
+    take: rna_ch                         
     main:
-        // one demux BAM per RNA sample is typical; merge only when >1 movie
         rna_ch
             | branch { meta, bams ->
                 multi:  (bams instanceof List) && (bams.size() > 1)
@@ -565,16 +539,13 @@ workflow RNA_PREPROCESS {
 
         isoseq_refine_cluster(ubam_final)
 
-        // per-molecule (refined FLNC) alignment — the BAM haplotag + ASE consume
         pbmm2_align_refinedFLNC(isoseq_refine_cluster.out.isoseq_flnc_refined)
-        // clustered alignment — feeds collapse / pigeon / fusion
         pbmm2_align_clusteredFLNC(isoseq_refine_cluster.out.isoseq_flnc_clustered)
      
         isocallProfile(pbmm2_align_refinedFLNC.out.bam)
-        //isocallCall(isocallProfile.out.profile)
 
 
-        // ---- the base map:  ------------------
+        // ---- base map:  ------------------
         isoseq_refine_cluster.out.isoseq_flnc_refined
             .join(isoseq_refine_cluster.out.isoseq_flnc_clustered)
             .join(isoseq_refine_cluster.out.refine_report_json)
@@ -667,7 +638,9 @@ workflow RNA_SUMMARY {
 }
 
 
-/* RNA arm (composed) — reusable by FULL and RNA entry points */
+/* =============================================================================
+ *  RNA ARM overall: 
+ * ========================================================================== */
 workflow RNA_ARM {
     take: rna_ch
     main:
@@ -689,7 +662,7 @@ workflow RNA_ARM {
 
 
 /* =============================================================================
- *  CROSS-ARM SUBWORKFLOWS  (RNA consumes DNA germline/somatic; join key = caseID)
+ *  CROSS-ARM SUBWORKFLOWS 1 (join key = caseID)
  * ========================================================================== */
 
 workflow RNA_HAPLOTAG {
@@ -761,7 +734,7 @@ workflow RNA_SOMATIC {
 
 
 /* =============================================================================
- *  INTEGRATION  (DNA <-> RNA cross-arm readouts; join key = caseID)
+ *  INTEGRATION  (Still needs work... TO DO; join key = caseID)
  * ========================================================================== */
 workflow INTEGRATION {
     take:
