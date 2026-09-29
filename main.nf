@@ -597,7 +597,7 @@ workflow RNA_TRANSCRIPTOME {
     take: preprocessFullOutput
     main:
         pigeon_classify(preprocessFullOutput)
-        sqanti3_QC(preprocessFullOutput)
+        //sqanti3_QC(preprocessFullOutput)
         //oarFish(preprocessFullOutput)
 
     emit:
@@ -605,7 +605,7 @@ workflow RNA_TRANSCRIPTOME {
         classification_lite = pigeon_classify.out.classification   // filtered_lite classification
         sortedGFF           = pigeon_classify.out.sortedGFF        // for ISA importGTF (splicing)
         pigeon              = pigeon_classify.out.pigeon
-        sqanti3             = sqanti3_QC.out.sqanti3QC
+        //sqanti3             = sqanti3_QC.out.sqanti3QC
         pigeonForSummary    = pigeon_classify.out.pigeon_reports_json
 }
 
