@@ -291,8 +291,8 @@ process pbfusion {
     -b ${data.refinedBAM} \
     --threads ${task.cpus} \
     --gtf ${params.gencode_gtf} \
-    --min-coverage 2 \
-    -o  ${meta.prefixRNA}.refinedBAM.fusion
+    --min-coverage 3 \
+    -o ${meta.prefixRNA}.refinedBAM.fusion
 
     cat  ${meta.prefixRNA}.refinedBAM.fusion.breakpoints.groups.bed| grep -w -f ${params.inhouse_fusionGenelist} > ${meta.prefixRNA}.refinedBAM.PBfusion.INHOUSE.txt
 
@@ -582,7 +582,7 @@ process splicing_isoformswitch {
 process lrs_splice {
     label 'medium'
     tag "$meta.id"
-    conda "${params.lrsSpliceEnv}"                // python3 + pysam (nothing else)
+    conda "${params.somaticSummaryEnv}"                // python3 + pysam (nothing else)
 
     publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
     publishDir "${meta.id}/TUMORBOARDFILES/RNA/",                      mode: 'copy', pattern: "*.aberrantSplicing.panel.tsv"
@@ -637,7 +637,7 @@ process lrs_splice {
 process lrs_splice_report {
     label 'low'
     tag "$meta.id"
-    conda "${params.lrsSpliceEnv}"                // stdlib only, but keep one env
+    conda "${params.somaticSummaryEnv}"                // stdlib only, but keep one env
 
     publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing*.html"
     publishDir "${meta.id}/TUMORBOARDFILES/RNA/",                      mode: 'copy', pattern: "*.aberrantSplicing.report.html"
