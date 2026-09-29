@@ -604,7 +604,7 @@ process lrs_splice {
     def genelist   = params.inhouse_splicing_genelist ? "--genes ${params.inhouse_splicing_genelist}" : ''
     def aliases    = params.splicing_genelist_aliases ? "--gene-aliases ${params.splicing_genelist_aliases}" : ''
     """
-    python3 ${params.lrs_splice_py} \\
+    python3 ${params.splicing_py} \\
         --bam                 ${data.bam} \\
         --gtf                 ${params.gencode_gtf} \\
         --fasta               ${params.genome_fasta} \\
@@ -652,13 +652,13 @@ process lrs_splice_report {
     script:
     """
     # embeddable fragment -> concatenated into clinical_summaryRNA
-    python3 ${params.lrs_splice_report_py} \\
+    python3 ${params.splicing_html} \\
         --json  ${data.json} \\
         --out   ${meta.prefixRNA}.aberrantSplicing.section.html \\
         --mode  fragment
 
     # standalone, for review / QC outside the summary
-    python3 ${params.lrs_splice_report_py} \\
+    python3 ${params.splicing_html} \\
         --json  ${data.json} \\
         --out   ${meta.prefixRNA}.aberrantSplicing.report.html \\
         --mode  standalone
