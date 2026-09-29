@@ -579,4 +579,89 @@ process splicing_isoformswitch {
     """
 }
 
+process lrs_splice {
+    label 'medium'
+    tag "$meta.id"
+    conda "${params.lrsSpliceEnv}"                // python3 + pysam (nothing else)
+
+    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
+    publishDir "${meta.id}/TUMORBOARDFILES/RNA/",                      mode: 'copy', pattern: "*.aberrantSplicing.panel.tsv"
+
+    input:
+    tuple val(meta), val(data)
+    // data: bam                (haplotagged, or plain refined pbmm2 BAM)
+    //       bai                (index; sits beside bam on the shared FS)
+    //       somaticVcf         optional — DeepSomatic PASS, ideally Pangolin-annotated.
+    //                          Pass [] to skip variant linking. .tbi must sit beside it.
+
+    output:
+    tuple val(meta), path("${meta.prefixRNA}.aberrantSplicing.tsv"),        emit: events
+    tuple val(meta), path("${meta.prefixRNA}.aberrantSplicing.json"),       emit: json
+    tuple val(meta), path("${meta.prefixRNA}.aberrantSplicing.panel.tsv"),  emit: panel, optional: true
+
+    script:
+    def somaticVcf = (data.somaticVcf == null || data.somaticVcf instanceof List) ? '' : "--somatic-vcf ${data.somaticVcf}"
+    def genelist   = params.inhouse_splicing_genelist ? "--genes ${params.inhouse_splicing_genelist}" : ''
+    def aliases    = params.splicing_genelist_aliases ? "--gene-aliases ${params.splicing_genelist_aliases}" : ''
+    """
+    python3 ${params.lrs_splice_py} \\
+        --bam                 ${data.bam} \\
+        --gtf                 ${params.gencode_gtf} \\
+        --fasta               ${params.genome_fasta} \\
+        ${genelist} \\
+        ${aliases} \\
+        ${somaticVcf} \\
+        --sample              ${meta.prefixRNA} \\
+        --min-reads           ${params.splice_minReads} \\
+        --min-usage           ${params.splice_minUsage} \\
+        --min-anchor          ${params.splice_minAnchor} \\
+        --min-cluster-depth   ${params.splice_minDepth} \\
+        --max-fdr             ${params.splice_maxFDR} \\
+        --ir-min-frac         ${params.splice_irMinFrac} \\
+        --variant-window      ${params.splice_variantWindow} \\
+        --out-tsv             ${meta.prefixRNA}.aberrantSplicing.tsv \\
+        --out-json            ${meta.prefixRNA}.aberrantSplicing.json
+
+    # tumorboard view: PASS events only (column looked up by header name, not index)
+    awk -F'\\t' 'NR==1{for(i=1;i<=NF;i++) if(\$i=="filter") c=i; print; next} c && \$c=="PASS"' \\
+        ${meta.prefixRNA}.aberrantSplicing.tsv > ${meta.prefixRNA}.aberrantSplicing.panel.tsv
+
+    # drop a header-only panel file so the optional output stays truly optional
+    if [ \$(wc -l < ${meta.prefixRNA}.aberrantSplicing.panel.tsv) -le 1 ]; then
+        rm -f ${meta.prefixRNA}.aberrantSplicing.panel.tsv
+    fi
+    """
+}
+
+
+process lrs_splice_report {
+    label 'low'
+    tag "$meta.id"
+    conda "${params.lrsSpliceEnv}"                // stdlib only, but keep one env
+
+    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing*.html"
+    publishDir "${meta.id}/TUMORBOARDFILES/RNA/",                      mode: 'copy', pattern: "*.aberrantSplicing.report.html"
+
+    input:
+    tuple val(meta), val(data)                    // data: json
+
+    output:
+    tuple val(meta), path("${meta.prefixRNA}.aberrantSplicing.section.html"), emit: section
+    tuple val(meta), path("${meta.prefixRNA}.aberrantSplicing.report.html"),  emit: html
+
+    script:
+    """
+    # embeddable fragment -> concatenated into clinical_summaryRNA
+    python3 ${params.lrs_splice_report_py} \\
+        --json  ${data.json} \\
+        --out   ${meta.prefixRNA}.aberrantSplicing.section.html \\
+        --mode  fragment
+
+    # standalone, for review / QC outside the summary
+    python3 ${params.lrs_splice_report_py} \\
+        --json  ${data.json} \\
+        --out   ${meta.prefixRNA}.aberrantSplicing.report.html \\
+        --mode  standalone
+    """
+}
 

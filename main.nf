@@ -213,6 +213,8 @@ include {
     ase_readcounter;
     expression_outlier;
     splicing_isoformswitch;
+    lrs_splice;             
+    lrs_splice_report;
 } from './modules/rnaModules.nf'
 
 
@@ -616,6 +618,42 @@ workflow RNA_FUSION {
         fusionForSummary = pbfusion.out.inhouse_fusion
 }
 
+workflow RNA_SPLICING {
+    take:
+        rna_bam            // (meta, bam, bai)   haplotagged if available
+        somatic_by_case    // (caseID, vcf)      DeepSomatic PASS; may be empty
+
+    main:
+        rna_bam
+            | map { meta, bam, bai -> [meta.id, meta, bam, bai] }
+            | join(somatic_by_case, remainder: true)     // + sVcf (null if absent)
+            | filter { it[1] != null && it[2] != null }  // drop somatic-only rows
+            | map { id, meta, bam, bai, sVcf ->
+                tuple(meta, [
+                    bam:        bam,
+                    bai:        bai,
+                    somaticVcf: (sVcf ?: [])             // [] -> linking skipped
+                ])
+            }
+            | set { splice_in }
+
+        lrs_splice(splice_in)
+
+        lrs_splice.out.json
+            | map { meta, json -> tuple(meta, [json: json]) }
+            | set { splice_report_in }
+
+        lrs_splice_report(splice_report_in)
+
+    emit:
+        events  = lrs_splice.out.events                  // (meta, full TSV)
+        panel   = lrs_splice.out.panel                   // (meta, PASS-only TSV)
+        json    = lrs_splice.out.json
+        section = lrs_splice_report.out.section          // -> clinical_summaryRNA
+        html    = lrs_splice_report.out.html
+}
+
+
 workflow RNA_SUMMARY {
     take:
         isoseqForSummary
@@ -811,10 +849,11 @@ workflow {
             | set { somatic_by_case }
 
         RNA_HAPLOTAG(RNA_ARM.out.refinedAlignedBam, germline_by_case)
-        
+        RNA_SPLICING(RNA_HAPLOTAG.out.haplotaggedBam, somatic_by_case)        
 
         
         if (params.somaticRNA) {
+
         RNA_SOMATIC(
             RNA_ARM.out.refinedAlignedBam,
             germline_by_case,
