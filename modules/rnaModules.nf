@@ -128,7 +128,7 @@ process pbmm2_align_refinedFLNC {
     tag "$meta.id"
     conda "${params.pbmm2}"
 
-    //publishDir {"${meta.id}/alignments/"}, mode: 'copy', pattern: '*.pbmm2.*'
+    publishDir {"${meta.id}/alignments/"}, mode: 'copy', pattern: '*.pbmm2.*'
     
     input:
     tuple val(meta), path(bam), path(pbi)
