@@ -606,7 +606,7 @@ process lrs_splice {
     def genelist2   = params.inhouse_splicing_genelist ? "--genes ${params.inhouse_splicing_genelist}" : ''
     def aliases    = params.splicing_genelist_aliases ? "--gene-aliases ${params.splicing_genelist_aliases}" : ''
     """
-    python3 ${params.splicing_py} \
+    python3 ${params.splicing_py110} \
         --bam                 ${data.bam} \
         --gtf                 ${params.gencode_gtf} \
         --fasta               ${params.genome_fasta} \
