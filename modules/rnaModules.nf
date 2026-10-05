@@ -584,7 +584,9 @@ process lrs_splice {
     tag "$meta.id"
     conda "${params.somaticSummaryEnv}"                // python3 + pysam (nothing else)
 
+//    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
     publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
+
     publishDir "${meta.id}/TUMORBOARDFILES/RNA/",                      mode: 'copy', pattern: "*.aberrantSplicing.panel.tsv"
 
     input:
@@ -652,15 +654,15 @@ process lrs_splice_report {
     script:
     """
     # embeddable fragment -> concatenated into clinical_summaryRNA
-    python3 ${params.splicing_html} \\
-        --json  ${data.json} \\
-        --out   ${meta.prefixRNA}.aberrantSplicing.section.html \\
+    python3 ${params.splicing_html} \
+        --json  ${data.json} \
+        --out   ${meta.prefixRNA}.aberrantSplicing.section.html \
         --mode  fragment
 
     # standalone, for review / QC outside the summary
-    python3 ${params.splicing_html} \\
-        --json  ${data.json} \\
-        --out   ${meta.prefixRNA}.aberrantSplicing.report.html \\
+    python3 ${params.splicing_html} \
+        --json  ${data.json} \
+        --out   ${meta.prefixRNA}.aberrantSplicing.report.html \
         --mode  standalone
     """
 }
