@@ -585,7 +585,7 @@ process lrs_splice {
     conda "${params.somaticSummaryEnv}"                // python3 + pysam (nothing else)
 
 //    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
-    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
+    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing110/", mode: 'copy', pattern: "*.aberrantSplicing.*"
 
     publishDir "${meta.id}/TUMORBOARDFILES/RNA/",                      mode: 'copy', pattern: "*.aberrantSplicing.panel.tsv"
 
