@@ -603,25 +603,25 @@ process lrs_splice {
 
     script:
     def somaticVcf = (data.somaticVcf == null || data.somaticVcf instanceof List) ? '' : "--somatic-vcf ${data.somaticVcf}"
-    def genelist   = params.inhouse_splicing_genelist ? "--genes ${params.inhouse_splicing_genelist}" : ''
+    def genelist2   = params.inhouse_splicing_genelist ? "--genes ${params.inhouse_splicing_genelist}" : ''
     def aliases    = params.splicing_genelist_aliases ? "--gene-aliases ${params.splicing_genelist_aliases}" : ''
     """
-    python3 ${params.splicing_py} \\
-        --bam                 ${data.bam} \\
-        --gtf                 ${params.gencode_gtf} \\
-        --fasta               ${params.genome_fasta} \\
-        ${genelist} \\
-        ${aliases} \\
-        ${somaticVcf} \\
-        --sample              ${meta.prefixRNA} \\
-        --min-reads           ${params.splice_minReads} \\
-        --min-usage           ${params.splice_minUsage} \\
-        --min-anchor          ${params.splice_minAnchor} \\
-        --min-cluster-depth   ${params.splice_minDepth} \\
-        --max-fdr             ${params.splice_maxFDR} \\
-        --ir-min-frac         ${params.splice_irMinFrac} \\
-        --variant-window      ${params.splice_variantWindow} \\
-        --out-tsv             ${meta.prefixRNA}.aberrantSplicing.tsv \\
+    python3 ${params.splicing_py} \
+        --bam                 ${data.bam} \
+        --gtf                 ${params.gencode_gtf} \
+        --fasta               ${params.genome_fasta} \
+        ${genelist2} \
+        ${aliases} \
+        ${somaticVcf} \
+        --sample              ${meta.prefixRNA} \
+        --min-reads           ${params.splice_minReads} \
+        --min-usage           ${params.splice_minUsage} \
+        --min-anchor          ${params.splice_minAnchor} \
+        --min-cluster-depth   ${params.splice_minDepth} \
+        --max-fdr             ${params.splice_maxFDR} \
+        --ir-min-frac         ${params.splice_irMinFrac} \
+        --variant-window      ${params.splice_variantWindow} \
+        --out-tsv             ${meta.prefixRNA}.aberrantSplicing.tsv \
         --out-json            ${meta.prefixRNA}.aberrantSplicing.json
 
     # tumorboard view: PASS events only (column looked up by header name, not index)
