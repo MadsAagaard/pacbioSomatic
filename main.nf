@@ -653,7 +653,7 @@ workflow RNA_SPLICING {
         html    = lrs_splice_report.out.html
 }
 
-
+/*
 workflow RNA_SUMMARY {
     take:
         isoseqForSummary
@@ -674,11 +674,46 @@ workflow RNA_SUMMARY {
 
 
 }
+*/
+workflow RNA_SUMMARY {
+    take:
+        isoseqForSummary
+        pigeonForSummary
+        fusionForSummary
+        spliceForSummary    // (meta, json, reportHtml) from RNA_SPLICING; Channel.empty() when not run
+    main:
+        // splicing is keyed by caseID and joined with remainder: a case without
+        // splicing (no normal DNA -> no haplotagged BAM, or RNA-only entry) still
+        // gets a summary; its section 04 then reads "not run".
+        spliceForSummary
+            | map { meta, json, html -> [meta.id, [json: json, html: html]] }
+            | set { splice_by_case }
 
+        isoseqForSummary.join(pigeonForSummary).join(fusionForSummary)
+            | map { meta, refine_json, pigeonFiltered_json, pigeonRaw_json, fusions ->
+                [meta.id, meta, refine_json, pigeonFiltered_json, pigeonRaw_json, fusions]
+            }
+            | join(splice_by_case, remainder: true)
+            | filter { it[1] != null }                       // drop splice-only rows
+            | map { id, meta, refine_json, pigeonFiltered_json, pigeonRaw_json, fusions, splice ->
+                tuple(meta, [
+                    refineReportJSON: refine_json,
+                    pigeonFilteredJSON: pigeonFiltered_json,
+                    pigeonRawJSON: pigeonRaw_json,
+                    fusionInhouse: fusions,
+                    spliceJSON:   (splice ? splice.json : []),         // [] -> section 04 "not run"
+                    spliceReport: (splice ? splice.html.name : null)   // file name only, for the link
+                ])
+            }
+            | set { rna_summary_joined }
+        collect_clinical_summaryRNA(rna_summary_joined)
+}
 
 /* =============================================================================
  *  RNA ARM overall: 
  * ========================================================================== */
+
+/*
 workflow RNA_ARM {
     take: rna_ch
     main:
@@ -697,7 +732,26 @@ workflow RNA_ARM {
         sortedGFF            = RNA_TRANSCRIPTOME.out.sortedGFF
         fusion               = RNA_FUSION.out.fusion
 }
+*/
 
+workflow RNA_ARM {
+    take: rna_ch
+    main:
+        RNA_PREPROCESS(rna_ch)
+        RNA_TRANSCRIPTOME(RNA_PREPROCESS.out.preprocessFullOutput)
+        RNA_FUSION(RNA_PREPROCESS.out.preprocessFullOutput)
+        // RNA_SUMMARY is called by the entry workflows, after RNA_SPLICING
+        // (which needs the DNA arm), so the summary can include section 04.
+    emit:
+        isoseqForSummary     = RNA_PREPROCESS.out.isoseqForSummary
+        pigeonForSummary     = RNA_TRANSCRIPTOME.out.pigeonForSummary
+        fusionForSummary     = RNA_FUSION.out.fusionForSummary
+        preprocessFullOutput = RNA_PREPROCESS.out.preprocessFullOutput
+        refinedAlignedBam    = RNA_PREPROCESS.out.refinedAlignedBam   // -> RNA_HAPLOTAG (next)
+        classification       = RNA_TRANSCRIPTOME.out.classification
+        sortedGFF            = RNA_TRANSCRIPTOME.out.sortedGFF
+        fusion               = RNA_FUSION.out.fusion
+}
 
 /* =============================================================================
  *  CROSS-ARM SUBWORKFLOWS 1 (join key = caseID)
@@ -849,9 +903,21 @@ workflow {
             | set { somatic_by_case }
 
         RNA_HAPLOTAG(RNA_ARM.out.refinedAlignedBam, germline_by_case)
-        RNA_SPLICING(RNA_HAPLOTAG.out.haplotaggedBam, somatic_by_case)        
 
-        
+
+        RNA_SPLICING(RNA_HAPLOTAG.out.haplotaggedBam, somatic_by_case)
+
+        RNA_SPLICING.out.json
+            | join(RNA_SPLICING.out.html)                         // (meta, json, report.html)
+            | set { splice_for_summary }
+
+        RNA_SUMMARY(
+            RNA_ARM.out.isoseqForSummary,
+            RNA_ARM.out.pigeonForSummary,
+            RNA_ARM.out.fusionForSummary,
+            splice_for_summary
+        )
+
         if (params.somaticRNA) {
 
         RNA_SOMATIC(

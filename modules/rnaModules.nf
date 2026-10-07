@@ -433,6 +433,7 @@ process whatshap_haplotag {
 
 }
 
+/*
 process collect_clinical_summaryRNA {
     label "low"
     tag "$meta.id"
@@ -461,6 +462,49 @@ process collect_clinical_summaryRNA {
         --pigeon-raw         ${data.pigeonRawJSON} \
         --pigeon-filtered    ${data.pigeonFilteredJSON} \
         --pbfusion           ${data.fusionInhouse} \
+        --html-template      ${params.clinical_summaryRNA_html} \
+        --output             ${meta.prefixTN}.clinical_summaryRNA
+    """
+}
+*/
+
+process collect_clinical_summaryRNA {
+    label "low"
+    tag "$meta.id"
+    conda "${params.somaticSummaryEnv}"  // needs pyyaml, pandas, python-calamine
+
+    publishDir "${meta.id}/TUMORBOARDFILES/", mode: 'copy', pattern: "*.clinical_summaryRNA.html"
+    publishDir "${meta.id}/summaryFiles/", mode: 'copy', pattern: "*.clinical_summaryRNA.*"
+   
+    publishDir "${params.lrsStorageBase}/clinicalSummaries/rna/json/", mode: 'copy', pattern: "*.clinical_summaryRNA.json"
+    publishDir "${params.lrsStorageBase}/clinicalSummaries/rna/yaml/", mode: 'copy', pattern: "*.clinical_summaryRNA.yaml"
+
+    input:
+    tuple val(meta), val(data)
+    // data: refineReportJSON, pigeonRawJSON, pigeonFilteredJSON, fusionInhouse
+    //       spliceJSON    lrs_splice JSON, or [] when splicing was not run
+    //       spliceReport  file name of the standalone lrs_splice report, or null
+
+    output:
+    tuple val(meta), path("${meta.prefixTN}.clinical_summaryRNA.yaml"), emit: yaml
+    tuple val(meta), path("${meta.prefixTN}.clinical_summaryRNA.json"), emit: json
+    tuple val(meta), path("${meta.prefixTN}.clinical_summaryRNA.html"), emit: html
+    script:
+    def spliceJson = (data.spliceJSON == null || data.spliceJSON instanceof List) ? '' : "--splice-json ${data.spliceJSON}"
+    // The link is relative to where the summary HTML is published (TUMORBOARDFILES/);
+    // lrs_splice_report publishes the standalone report to TUMORBOARDFILES/RNA/.
+    def spliceHref = data.spliceReport ? "--splice-report-href RNA/${data.spliceReport}" : ''
+    """
+    python3 ${params.clinical_summaryRNA_py} \
+        --case-id            ${meta.id} \
+        --npn-rna            ${meta.npn} \
+        --genome-version     ${params.genome_version} \
+        --refine-json        ${data.refineReportJSON} \
+        --pigeon-raw         ${data.pigeonRawJSON} \
+        --pigeon-filtered    ${data.pigeonFilteredJSON} \
+        --pbfusion           ${data.fusionInhouse} \
+        ${spliceJson} \
+        ${spliceHref} \
         --html-template      ${params.clinical_summaryRNA_html} \
         --output             ${meta.prefixTN}.clinical_summaryRNA
     """
@@ -585,7 +629,7 @@ process lrs_splice {
     conda "${params.somaticSummaryEnv}"                // python3 + pysam (nothing else)
 
 //    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
-    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing110/", mode: 'copy', pattern: "*.aberrantSplicing.*"
+    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
 
     publishDir "${meta.id}/TUMORBOARDFILES/RNA/",                      mode: 'copy', pattern: "*.aberrantSplicing.panel.tsv"
 
@@ -619,6 +663,9 @@ process lrs_splice {
         --min-anchor          ${params.splice_minAnchor} \
         --min-cluster-depth   ${params.splice_minDepth} \
         --max-fdr             ${params.splice_maxFDR} \
+        --high-min-reads      ${params.splice_highMinReads} \
+        --tandem-max-shift    ${params.splice_tandemMaxShift} \
+        --annotated-cap       ${params.splice_annotatedCap} \
         --ir-min-frac         ${params.splice_irMinFrac} \
         --variant-window      ${params.splice_variantWindow} \
         --out-tsv             ${meta.prefixRNA}.aberrantSplicing.tsv \
