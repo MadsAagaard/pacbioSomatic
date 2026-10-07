@@ -622,16 +622,16 @@ process splicing_isoformswitch {
         --out            ${meta.prefixRNA}
     """
 }
-
+/*
 process lrs_splice {
     label 'medium'
     tag "$meta.id"
     conda "${params.somaticSummaryEnv}"                // python3 + pysam (nothing else)
 
-//    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
+    //    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
     publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
 
-    publishDir "${meta.id}/TUMORBOARDFILES/RNA/",                      mode: 'copy', pattern: "*.aberrantSplicing.panel.tsv"
+    publishDir "${params.lrsStorageBase}/splicing/json/", mode: 'copy', pattern: "*.aberrantSplicing.json"
 
     input:
     tuple val(meta), val(data)
@@ -681,7 +681,72 @@ process lrs_splice {
     fi
     """
 }
+*/
 
+process lrs_splice {
+    label 'medium'
+    tag "$meta.id"
+    conda "${params.somaticSummaryEnv}"                // python3 + pysam (nothing else)
+
+//    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
+    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing110/", mode: 'copy', pattern: "*.aberrantSplicing.*"
+
+    publishDir "${meta.id}/TUMORBOARDFILES/RNA/",                      mode: 'copy', pattern: "*.aberrantSplicing.panel.tsv"
+    // central collection point for building the cohort recurrence store
+    publishDir "${params.lrsStorageBase}/splicing/json/",              mode: 'copy', pattern: "*.aberrantSplicing.json"
+
+    input:
+    tuple val(meta), val(data)
+    path recurrenceDb       // cohort recurrence store (tsv.gz), or [] when not used
+    path recurrenceExempt   // known pathogenic junctions (tsv), or [] when not used
+
+    output:
+    tuple val(meta), path("${meta.prefixRNA}.aberrantSplicing.tsv"),        emit: events
+    tuple val(meta), path("${meta.prefixRNA}.aberrantSplicing.json"),       emit: json
+    tuple val(meta), path("${meta.prefixRNA}.aberrantSplicing.panel.tsv"),  emit: panel, optional: true
+
+    script:
+    def somaticVcf = (data.somaticVcf == null || data.somaticVcf instanceof List) ? '' : "--somatic-vcf ${data.somaticVcf}"
+    def genelist2   = params.inhouse_splicing_genelist ? "--genes ${params.inhouse_splicing_genelist}" : ''
+    def aliases    = params.splicing_genelist_aliases ? "--gene-aliases ${params.splicing_genelist_aliases}" : ''
+    // patient key: must equal the patient column used when adding samples to the store
+    def patient    = "--patient ${meta.id}"
+    def tumourType = meta.pcgr ? "--tumour-type ${meta.pcgr}" : ''
+    def recurrence = recurrenceDb     ? "--recurrence-db ${recurrenceDb} --recurrence-mode ${params.splice_recurrenceMode}" : ''
+    def exempt     = recurrenceExempt ? "--recurrence-exempt ${recurrenceExempt}" : ''
+    """
+    python3 ${params.splicing_py} \
+        --bam                 ${data.bam} \
+        --gtf                 ${params.gencode_gtf} \
+        --fasta               ${params.genome_fasta} \
+        ${genelist2} \
+        ${aliases} \
+        ${somaticVcf} \
+        --sample              ${meta.prefixRNA} \
+        ${patient} \
+        ${tumourType} \
+        ${recurrence} \
+        ${exempt} \
+        --min-reads           ${params.splice_minReads} \
+        --min-usage           ${params.splice_minUsage} \
+        --min-anchor          ${params.splice_minAnchor} \
+        --min-cluster-depth   ${params.splice_minDepth} \
+        --max-fdr             ${params.splice_maxFDR} \
+        --ir-min-frac         ${params.splice_irMinFrac} \
+        --variant-window      ${params.splice_variantWindow} \
+        --out-tsv             ${meta.prefixRNA}.aberrantSplicing.tsv \
+        --out-json            ${meta.prefixRNA}.aberrantSplicing.json
+
+    # tumorboard view: PASS events only (column looked up by header name, not index)
+    awk -F'\\t' 'NR==1{for(i=1;i<=NF;i++) if(\$i=="filter") c=i; print; next} c && \$c=="PASS"' \\
+        ${meta.prefixRNA}.aberrantSplicing.tsv > ${meta.prefixRNA}.aberrantSplicing.panel.tsv
+
+    # drop a header-only panel file so the optional output stays truly optional
+    if [ \$(wc -l < ${meta.prefixRNA}.aberrantSplicing.panel.tsv) -le 1 ]; then
+        rm -f ${meta.prefixRNA}.aberrantSplicing.panel.tsv
+    fi
+    """
+}
 
 process lrs_splice_report {
     label 'low'

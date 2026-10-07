@@ -618,6 +618,7 @@ workflow RNA_FUSION {
         fusionForSummary = pbfusion.out.inhouse_fusion
 }
 
+
 workflow RNA_SPLICING {
     take:
         rna_bam            // (meta, bam, bai)   haplotagged if available
@@ -637,7 +638,11 @@ workflow RNA_SPLICING {
             }
             | set { splice_in }
 
-        lrs_splice(splice_in)
+        // optional inputs: a real path, or [] (Nextflow stages nothing). Passed as
+        // path inputs, not strings, so -resume reruns when the store is updated.
+        def recDb     = params.splice_recurrenceDb     ? file(params.splice_recurrenceDb, checkIfExists: true)     : []
+        def recExempt = params.splice_recurrenceExempt ? file(params.splice_recurrenceExempt, checkIfExists: true) : []
+        lrs_splice(splice_in, recDb, recExempt)
 
         lrs_splice.out.json
             | map { meta, json -> tuple(meta, [json: json]) }
@@ -652,7 +657,6 @@ workflow RNA_SPLICING {
         section = lrs_splice_report.out.section          // -> clinical_summaryRNA
         html    = lrs_splice_report.out.html
 }
-
 /*
 workflow RNA_SUMMARY {
     take:
