@@ -937,7 +937,8 @@ workflow {
             RNA_ARM.out.isoseqForSummary,
             RNA_ARM.out.pigeonForSummary,
             RNA_ARM.out.fusionForSummary,
-            splice_for_summary
+            splice_for_summary,
+            RNA_ARM.out.fusionAnnot
         )
 
         if (params.somaticRNA) {
