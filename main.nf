@@ -205,6 +205,7 @@ include {
     pigeon_classify;
     sqanti3_QC;
     pbfusion;
+    fusion_annotate;
     isocallProfile;
     isocallCall;
     oarFish;
@@ -613,12 +614,24 @@ workflow RNA_FUSION {
     take: preprocessFullOutput
     main:
         pbfusion(preprocessFullOutput)
+
+        // fusion annotation -- TEST PHASE: annotates every pbfusion call
+        // (panel membership is a tag, not a filter); nothing reads the JSON yet
+        fusionAnnot = Channel.empty()
+        if (!params.skipFusionAnnotate) {
+            fusion_annotate(
+                pbfusion.out.bedpe,
+                file(params.fusion_annotation, checkIfExists: true),
+                file(params.fusion_domains,    checkIfExists: true),
+                file(params.fusion_gene_list,  checkIfExists: true)
+            )
+            fusionAnnot = fusion_annotate.out.json
+        }
     emit:
-        fusion   = pbfusion.out.fusion
+        fusion           = pbfusion.out.fusion
         fusionForSummary = pbfusion.out.inhouse_fusion
+        fusionAnnot      = fusionAnnot      // (meta, *.fusion_annot.json)
 }
-
-
 workflow RNA_SPLICING {
     take:
         rna_bam            // (meta, bam, bai)   haplotagged if available

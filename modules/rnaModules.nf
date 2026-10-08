@@ -283,7 +283,11 @@ process pbfusion {
     
     output:
     tuple val(meta), path("*.{pdf,bed,txt,vcf,idx}"),  emit: fusion
+    
     tuple val(meta), path("${meta.prefixRNA}.refinedBAM.PBfusion.INHOUSE.txt"),  emit: inhouse_fusion 
+
+    tuple val(meta), path("${meta.prefixRNA}.refinedBAM.fusion.breakpoints.groups.bed"), emit: bedpe  
+  
     script:
     //def (refined_bam,refined_pbi,pbmm2_bam,pbmm2_bai) = data
     """
@@ -296,6 +300,57 @@ process pbfusion {
 
     cat  ${meta.prefixRNA}.refinedBAM.fusion.breakpoints.groups.bed| grep -w -f ${params.inhouse_fusionGenelist} > ${meta.prefixRNA}.refinedBAM.PBfusion.INHOUSE.txt
 
+    """
+}
+
+process fusion_annotate {
+    label 'low'
+    tag "$meta.id"
+    conda "${params.somaticSummaryEnv}"            // any python3; the tool is stdlib-only
+
+    publishDir "${meta.id}/toolsOutputRNA/fusion_annotate/", mode: 'copy'
+
+    input:
+    tuple val(meta), path(bedpe)    // pbfusion *.breakpoints.groups.bed
+    path annotation                 // MANE Select genePred asset
+    path domains                    // reconciled domain table (*.mane.tsv)
+    path geneList                   // panel, current HGNC symbols -- tags in_panel, filters nothing
+
+    output:
+    tuple val(meta), path("${meta.prefixRNA}.fusion_annot.json"),         emit: json
+    tuple val(meta), path("${meta.prefixRNA}.fusion_annot.txt"),          emit: report
+    tuple val(meta), path("${meta.prefixRNA}.fusion_annot*.svg"),         emit: svg,     optional: true
+    tuple val(meta), path("${meta.prefixRNA}.fusion_annot.chimera.fa"),   emit: protein, optional: true
+    tuple val(meta), path("${meta.prefixRNA}.fusion_annot.versions.yml"), emit: versions
+
+    script:
+    def out = "${meta.prefixRNA}.fusion_annot"
+    """
+    set -euo pipefail
+
+    python3 ${params.fusion_annotate_py} \\
+        --bedpe          ${bedpe} \\
+        --annotation     ${annotation} \\
+        --domains        ${domains} \\
+        --gene-list      ${geneList} \\
+        --fasta          ${params.genome_fasta} \\
+        --min-confidence ${params.fusion_min_confidence} \\
+        --json           ${out}.json \\
+        --report         ${out}.txt \\
+        --svg            ${out}.svg \\
+        --protein-fasta  ${out}.chimera.fa
+
+    # contract check: every pbfusion call is annotated or listed as skipped
+    python3 -c "import json,sys; d=json.load(open('${out}.json')); sys.exit(0 if d['schema_version'] >= 2 and d['n_calls_in'] == len(d['fusions']) + len(d['skipped']) else 'fusion_annotate: JSON contract check failed')"
+
+    cat <<-END_VERSIONS > ${out}.versions.yml
+    "${task.process}":
+        fusion_annotate: \$(python3 ${params.fusion_annotate_py} --version | cut -d' ' -f2)
+        annotation: "${annotation.name} \$(sha256sum ${annotation} | cut -c1-64)"
+        domains: "${domains.name} \$(sha256sum ${domains} | cut -c1-64)"
+        gene_list: "${geneList.name} \$(sha256sum ${geneList} | cut -c1-64)"
+        fasta: "${params.genome_fasta}"
+    END_VERSIONS
     """
 }
 
