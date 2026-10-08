@@ -697,29 +697,33 @@ workflow RNA_SUMMARY {
         isoseqForSummary
         pigeonForSummary
         fusionForSummary
-        spliceForSummary    // (meta, json, reportHtml) from RNA_SPLICING; Channel.empty() when not run
+        spliceForSummary
+        fusionAnnotForSummary   // (meta, *.fusion_annot.json); Channel.empty() when not run
     main:
-        // splicing is keyed by caseID and joined with remainder: a case without
-        // splicing (no normal DNA -> no haplotagged BAM, or RNA-only entry) still
-        // gets a summary; its section 04 then reads "not run".
         spliceForSummary
             | map { meta, json, html -> [meta.id, [json: json, html: html]] }
             | set { splice_by_case }
+        fusionAnnotForSummary
+            | map { meta, json -> [meta.id, json] }
+            | set { annot_by_case }
 
         isoseqForSummary.join(pigeonForSummary).join(fusionForSummary)
             | map { meta, refine_json, pigeonFiltered_json, pigeonRaw_json, fusions ->
                 [meta.id, meta, refine_json, pigeonFiltered_json, pigeonRaw_json, fusions]
             }
             | join(splice_by_case, remainder: true)
-            | filter { it[1] != null }                       // drop splice-only rows
-            | map { id, meta, refine_json, pigeonFiltered_json, pigeonRaw_json, fusions, splice ->
+            | filter { it[1] != null }
+            | join(annot_by_case, remainder: true)
+            | filter { it[1] != null }
+            | map { id, meta, refine_json, pigeonFiltered_json, pigeonRaw_json, fusions, splice, annot ->
                 tuple(meta, [
                     refineReportJSON: refine_json,
                     pigeonFilteredJSON: pigeonFiltered_json,
                     pigeonRawJSON: pigeonRaw_json,
                     fusionInhouse: fusions,
-                    spliceJSON:   (splice ? splice.json : []),         // [] -> section 04 "not run"
-                    spliceReport: (splice ? splice.html.name : null)   // file name only, for the link
+                    fusionAnnot:  (annot ?: []),
+                    spliceJSON:   (splice ? splice.json : []),
+                    spliceReport: (splice ? splice.html.name : null)
                 ])
             }
             | set { rna_summary_joined }
@@ -768,6 +772,7 @@ workflow RNA_ARM {
         classification       = RNA_TRANSCRIPTOME.out.classification
         sortedGFF            = RNA_TRANSCRIPTOME.out.sortedGFF
         fusion               = RNA_FUSION.out.fusion
+        fusionAnnot          = RNA_FUSION.out.fusionAnnot
 }
 
 /* =============================================================================

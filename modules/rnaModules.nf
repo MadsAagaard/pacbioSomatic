@@ -549,6 +549,8 @@ process collect_clinical_summaryRNA {
     // The link is relative to where the summary HTML is published (TUMORBOARDFILES/);
     // lrs_splice_report publishes the standalone report to TUMORBOARDFILES/RNA/.
     def spliceHref = data.spliceReport ? "--splice-report-href RNA/${data.spliceReport}" : ''
+    def fusionAnnot = (data.fusionAnnot == null || data.fusionAnnot instanceof List) ? '' : "--fusion-annot ${data.fusionAnnot}"
+    
     """
     python3 ${params.clinical_summaryRNA_py} \
         --case-id            ${meta.id} \
@@ -558,6 +560,7 @@ process collect_clinical_summaryRNA {
         --pigeon-raw         ${data.pigeonRawJSON} \
         --pigeon-filtered    ${data.pigeonFilteredJSON} \
         --pbfusion           ${data.fusionInhouse} \
+        ${fusionAnnot} \
         ${spliceJson} \
         ${spliceHref} \
         --html-template      ${params.clinical_summaryRNA_html} \
