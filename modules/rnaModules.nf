@@ -726,6 +726,9 @@ process lrs_splice {
         ${tumourType} \
         ${recurrence} \
         ${exempt} \
+        --high-min-reads      ${params.splice_highMinReads} \
+        --tandem-max-shift    ${params.splice_tandemMaxShift} \
+        --annotated-cap       ${params.splice_annotatedCap} \
         --min-reads           ${params.splice_minReads} \
         --min-usage           ${params.splice_minUsage} \
         --min-anchor          ${params.splice_minAnchor} \
