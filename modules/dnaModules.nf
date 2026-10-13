@@ -520,7 +520,7 @@ process deepSomatic {
     --output_vcf=${meta.prefixTN}.deepSomatic.vcf.gz \
     --output_gvcf=${meta.prefixTN}.deepSomatic.g.vcf.gz \
     --num_shards=${task.cpus} \
-    --regions ${params.ROI} \
+    ##--regions ${params.ROI} \
     --logging_dir .
 
     bcftools view -f PASS ${meta.prefixTN}.deepSomatic.vcf.gz -Oz -o ${meta.prefixTN}.deepSomatic.PASS.vcf.gz

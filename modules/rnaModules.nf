@@ -128,7 +128,7 @@ process pbmm2_align_refinedFLNC {
     tag "$meta.id"
     conda "${params.pbmm2}"
 
-    //publishDir {"${meta.id}/alignments/"}, mode: 'copy', pattern: '*.pbmm2.*'
+    publishDir {"${meta.id}/alignments/"}, mode: 'copy', pattern: '*.pbmm2.*'
     
     input:
     tuple val(meta), path(bam), path(pbi)
@@ -283,7 +283,11 @@ process pbfusion {
     
     output:
     tuple val(meta), path("*.{pdf,bed,txt,vcf,idx}"),  emit: fusion
+    
     tuple val(meta), path("${meta.prefixRNA}.refinedBAM.PBfusion.INHOUSE.txt"),  emit: inhouse_fusion 
+
+    tuple val(meta), path("${meta.prefixRNA}.refinedBAM.fusion.breakpoints.groups.bed"), emit: bedpe  
+  
     script:
     //def (refined_bam,refined_pbi,pbmm2_bam,pbmm2_bai) = data
     """
@@ -291,11 +295,62 @@ process pbfusion {
     -b ${data.refinedBAM} \
     --threads ${task.cpus} \
     --gtf ${params.gencode_gtf} \
-    --min-coverage 2 \
-    -o  ${meta.prefixRNA}.refinedBAM.fusion
+    --min-coverage 3 \
+    -o ${meta.prefixRNA}.refinedBAM.fusion
 
     cat  ${meta.prefixRNA}.refinedBAM.fusion.breakpoints.groups.bed| grep -w -f ${params.inhouse_fusionGenelist} > ${meta.prefixRNA}.refinedBAM.PBfusion.INHOUSE.txt
 
+    """
+}
+
+process fusion_annotate {
+    label 'low'
+    tag "$meta.id"
+    conda "${params.somaticSummaryEnv}"            // any python3; the tool is stdlib-only
+
+    publishDir "${meta.id}/toolsOutputRNA/fusion_annotate/", mode: 'copy'
+
+    input:
+    tuple val(meta), path(bedpe)    // pbfusion *.breakpoints.groups.bed
+    path annotation                 // MANE Select genePred asset
+    path domains                    // reconciled domain table (*.mane.tsv)
+    path geneList                   // panel, current HGNC symbols -- tags in_panel, filters nothing
+
+    output:
+    tuple val(meta), path("${meta.prefixRNA}.fusion_annot.json"),         emit: json
+    tuple val(meta), path("${meta.prefixRNA}.fusion_annot.txt"),          emit: report
+    tuple val(meta), path("${meta.prefixRNA}.fusion_annot*.svg"),         emit: svg,     optional: true
+    tuple val(meta), path("${meta.prefixRNA}.fusion_annot.chimera.fa"),   emit: protein, optional: true
+    tuple val(meta), path("${meta.prefixRNA}.fusion_annot.versions.yml"), emit: versions
+
+    script:
+    def out = "${meta.prefixRNA}.fusion_annot"
+    """
+    set -euo pipefail
+
+    python3 ${params.fusion_annotate_py} \\
+        --bedpe          ${bedpe} \\
+        --annotation     ${annotation} \\
+        --domains        ${domains} \\
+        --gene-list      ${geneList} \\
+        --fasta          ${params.genome_fasta} \\
+        --min-confidence ${params.fusion_min_confidence} \\
+        --json           ${out}.json \\
+        --report         ${out}.txt \\
+        --svg            ${out}.svg \\
+        --protein-fasta  ${out}.chimera.fa
+
+    # contract check: every pbfusion call is annotated or listed as skipped
+    python3 -c "import json,sys; d=json.load(open('${out}.json')); sys.exit(0 if d['schema_version'] >= 2 and d['n_calls_in'] == len(d['fusions']) + len(d['skipped']) else 'fusion_annotate: JSON contract check failed')"
+
+    cat <<-END_VERSIONS > ${out}.versions.yml
+    "${task.process}":
+        fusion_annotate: \$(python3 ${params.fusion_annotate_py} --version | cut -d' ' -f2)
+        annotation: "${annotation.name} \$(sha256sum ${annotation} | cut -c1-64)"
+        domains: "${domains.name} \$(sha256sum ${domains} | cut -c1-64)"
+        gene_list: "${geneList.name} \$(sha256sum ${geneList} | cut -c1-64)"
+        fasta: "${params.genome_fasta}"
+    END_VERSIONS
     """
 }
 
@@ -433,6 +488,7 @@ process whatshap_haplotag {
 
 }
 
+/*
 process collect_clinical_summaryRNA {
     label "low"
     tag "$meta.id"
@@ -461,6 +517,52 @@ process collect_clinical_summaryRNA {
         --pigeon-raw         ${data.pigeonRawJSON} \
         --pigeon-filtered    ${data.pigeonFilteredJSON} \
         --pbfusion           ${data.fusionInhouse} \
+        --html-template      ${params.clinical_summaryRNA_html} \
+        --output             ${meta.prefixTN}.clinical_summaryRNA
+    """
+}
+*/
+
+process collect_clinical_summaryRNA {
+    label "low"
+    tag "$meta.id"
+    conda "${params.somaticSummaryEnv}"  // needs pyyaml, pandas, python-calamine
+
+    publishDir "${meta.id}/TUMORBOARDFILES/", mode: 'copy', pattern: "*.clinical_summaryRNA.html"
+    publishDir "${meta.id}/summaryFiles/", mode: 'copy', pattern: "*.clinical_summaryRNA.*"
+   
+    publishDir "${params.lrsStorageBase}/clinicalSummaries/rna/json/", mode: 'copy', pattern: "*.clinical_summaryRNA.json"
+    publishDir "${params.lrsStorageBase}/clinicalSummaries/rna/yaml/", mode: 'copy', pattern: "*.clinical_summaryRNA.yaml"
+
+    input:
+    tuple val(meta), val(data)
+    // data: refineReportJSON, pigeonRawJSON, pigeonFilteredJSON, fusionInhouse
+    //       spliceJSON    lrs_splice JSON, or [] when splicing was not run
+    //       spliceReport  file name of the standalone lrs_splice report, or null
+
+    output:
+    tuple val(meta), path("${meta.prefixTN}.clinical_summaryRNA.yaml"), emit: yaml
+    tuple val(meta), path("${meta.prefixTN}.clinical_summaryRNA.json"), emit: json
+    tuple val(meta), path("${meta.prefixTN}.clinical_summaryRNA.html"), emit: html
+    script:
+    def spliceJson = (data.spliceJSON == null || data.spliceJSON instanceof List) ? '' : "--splice-json ${data.spliceJSON}"
+    // The link is relative to where the summary HTML is published (TUMORBOARDFILES/);
+    // lrs_splice_report publishes the standalone report to TUMORBOARDFILES/RNA/.
+    def spliceHref = data.spliceReport ? "--splice-report-href RNA/${data.spliceReport}" : ''
+    def fusionAnnot = (data.fusionAnnot == null || data.fusionAnnot instanceof List) ? '' : "--fusion-annot ${data.fusionAnnot}"
+    
+    """
+    python3 ${params.clinical_summaryRNA_py} \
+        --case-id            ${meta.id} \
+        --npn-rna            ${meta.npn} \
+        --genome-version     ${params.genome_version} \
+        --refine-json        ${data.refineReportJSON} \
+        --pigeon-raw         ${data.pigeonRawJSON} \
+        --pigeon-filtered    ${data.pigeonFilteredJSON} \
+        --pbfusion           ${data.fusionInhouse} \
+        ${fusionAnnot} \
+        ${spliceJson} \
+        ${spliceHref} \
         --html-template      ${params.clinical_summaryRNA_html} \
         --output             ${meta.prefixTN}.clinical_summaryRNA
     """
@@ -578,5 +680,162 @@ process splicing_isoformswitch {
         --out            ${meta.prefixRNA}
     """
 }
+/*
+process lrs_splice {
+    label 'medium'
+    tag "$meta.id"
+    conda "${params.somaticSummaryEnv}"                // python3 + pysam (nothing else)
 
+    //    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
+    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
+
+    publishDir "${params.lrsStorageBase}/splicing/json/", mode: 'copy', pattern: "*.aberrantSplicing.json"
+
+    input:
+    tuple val(meta), val(data)
+    // data: bam                (haplotagged, or plain refined pbmm2 BAM)
+    //       bai                (index; sits beside bam on the shared FS)
+    //       somaticVcf         optional — DeepSomatic PASS, ideally Pangolin-annotated.
+    //                          Pass [] to skip variant linking. .tbi must sit beside it.
+
+    output:
+    tuple val(meta), path("${meta.prefixRNA}.aberrantSplicing.tsv"),        emit: events
+    tuple val(meta), path("${meta.prefixRNA}.aberrantSplicing.json"),       emit: json
+    tuple val(meta), path("${meta.prefixRNA}.aberrantSplicing.panel.tsv"),  emit: panel, optional: true
+
+    script:
+    def somaticVcf = (data.somaticVcf == null || data.somaticVcf instanceof List) ? '' : "--somatic-vcf ${data.somaticVcf}"
+    def genelist2   = params.inhouse_splicing_genelist ? "--genes ${params.inhouse_splicing_genelist}" : ''
+    def aliases    = params.splicing_genelist_aliases ? "--gene-aliases ${params.splicing_genelist_aliases}" : ''
+    """
+    python3 ${params.splicing_py} \
+        --bam                 ${data.bam} \
+        --gtf                 ${params.gencode_gtf} \
+        --fasta               ${params.genome_fasta} \
+        ${genelist2} \
+        ${aliases} \
+        ${somaticVcf} \
+        --sample              ${meta.prefixRNA} \
+        --min-reads           ${params.splice_minReads} \
+        --min-usage           ${params.splice_minUsage} \
+        --min-anchor          ${params.splice_minAnchor} \
+        --min-cluster-depth   ${params.splice_minDepth} \
+        --max-fdr             ${params.splice_maxFDR} \
+        --high-min-reads      ${params.splice_highMinReads} \
+        --tandem-max-shift    ${params.splice_tandemMaxShift} \
+        --annotated-cap       ${params.splice_annotatedCap} \
+        --ir-min-frac         ${params.splice_irMinFrac} \
+        --variant-window      ${params.splice_variantWindow} \
+        --out-tsv             ${meta.prefixRNA}.aberrantSplicing.tsv \
+        --out-json            ${meta.prefixRNA}.aberrantSplicing.json
+
+    # tumorboard view: PASS events only (column looked up by header name, not index)
+    awk -F'\\t' 'NR==1{for(i=1;i<=NF;i++) if(\$i=="filter") c=i; print; next} c && \$c=="PASS"' \\
+        ${meta.prefixRNA}.aberrantSplicing.tsv > ${meta.prefixRNA}.aberrantSplicing.panel.tsv
+
+    # drop a header-only panel file so the optional output stays truly optional
+    if [ \$(wc -l < ${meta.prefixRNA}.aberrantSplicing.panel.tsv) -le 1 ]; then
+        rm -f ${meta.prefixRNA}.aberrantSplicing.panel.tsv
+    fi
+    """
+}
+*/
+
+process lrs_splice {
+    label 'medium'
+    tag "$meta.id"
+    conda "${params.somaticSummaryEnv}"                // python3 + pysam (nothing else)
+
+    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
+
+    publishDir "${meta.id}/TUMORBOARDFILES/RNA/",                      mode: 'copy', pattern: "*.aberrantSplicing.panel.tsv"
+    // central collection point for building the cohort recurrence store
+    publishDir "${params.lrsStorageBase}/splicing/json/",              mode: 'copy', pattern: "*.aberrantSplicing.json"
+
+    input:
+    tuple val(meta), val(data)
+    path recurrenceDb       // cohort recurrence store (tsv.gz), or [] when not used
+    path recurrenceExempt   // known pathogenic junctions (tsv), or [] when not used
+
+    output:
+    tuple val(meta), path("${meta.prefixRNA}.aberrantSplicing.tsv"),        emit: events
+    tuple val(meta), path("${meta.prefixRNA}.aberrantSplicing.json"),       emit: json
+    tuple val(meta), path("${meta.prefixRNA}.aberrantSplicing.panel.tsv"),  emit: panel, optional: true
+
+    script:
+    def somaticVcf = (data.somaticVcf == null || data.somaticVcf instanceof List) ? '' : "--somatic-vcf ${data.somaticVcf}"
+    def genelist2   = params.inhouse_splicing_genelist ? "--genes ${params.inhouse_splicing_genelist}" : ''
+    def aliases    = params.splicing_genelist_aliases ? "--gene-aliases ${params.splicing_genelist_aliases}" : ''
+    // patient key: must equal the patient column used when adding samples to the store
+    def patient    = "--patient ${meta.id}"
+    def tumourType = meta.pcgr ? "--tumour-type ${meta.pcgr}" : ''
+    def recurrence = recurrenceDb     ? "--recurrence-db ${recurrenceDb} --recurrence-mode ${params.splice_recurrenceMode}" : ''
+    def exempt     = recurrenceExempt ? "--recurrence-exempt ${recurrenceExempt}" : ''
+    """
+    python3 ${params.splicing_py} \
+        --bam                 ${data.bam} \
+        --gtf                 ${params.gencode_gtf} \
+        --fasta               ${params.genome_fasta} \
+        ${genelist2} \
+        ${aliases} \
+        ${somaticVcf} \
+        --sample              ${meta.prefixRNA} \
+        ${patient} \
+        ${tumourType} \
+        ${recurrence} \
+        ${exempt} \
+        --high-min-reads      ${params.splice_highMinReads} \
+        --tandem-max-shift    ${params.splice_tandemMaxShift} \
+        --annotated-cap       ${params.splice_annotatedCap} \
+        --min-reads           ${params.splice_minReads} \
+        --min-usage           ${params.splice_minUsage} \
+        --min-anchor          ${params.splice_minAnchor} \
+        --min-cluster-depth   ${params.splice_minDepth} \
+        --max-fdr             ${params.splice_maxFDR} \
+        --ir-min-frac         ${params.splice_irMinFrac} \
+        --variant-window      ${params.splice_variantWindow} \
+        --out-tsv             ${meta.prefixRNA}.aberrantSplicing.tsv \
+        --out-json            ${meta.prefixRNA}.aberrantSplicing.json
+
+    # tumorboard view: PASS events only (column looked up by header name, not index)
+    awk -F'\\t' 'NR==1{for(i=1;i<=NF;i++) if(\$i=="filter") c=i; print; next} c && \$c=="PASS"' \\
+        ${meta.prefixRNA}.aberrantSplicing.tsv > ${meta.prefixRNA}.aberrantSplicing.panel.tsv
+
+    # drop a header-only panel file so the optional output stays truly optional
+    if [ \$(wc -l < ${meta.prefixRNA}.aberrantSplicing.panel.tsv) -le 1 ]; then
+        rm -f ${meta.prefixRNA}.aberrantSplicing.panel.tsv
+    fi
+    """
+}
+
+process lrs_splice_report {
+    label 'low'
+    tag "$meta.id"
+    conda "${params.somaticSummaryEnv}"                // stdlib only, but keep one env
+
+    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing*.html"
+    publishDir "${meta.id}/TUMORBOARDFILES/RNA/",                      mode: 'copy', pattern: "*.aberrantSplicing.report.html"
+
+    input:
+    tuple val(meta), val(data)                    // data: json
+
+    output:
+    tuple val(meta), path("${meta.prefixRNA}.aberrantSplicing.section.html"), emit: section
+    tuple val(meta), path("${meta.prefixRNA}.aberrantSplicing.report.html"),  emit: html
+
+    script:
+    """
+    # embeddable fragment -> concatenated into clinical_summaryRNA
+    python3 ${params.splicing_html} \
+        --json  ${data.json} \
+        --out   ${meta.prefixRNA}.aberrantSplicing.section.html \
+        --mode  fragment
+
+    # standalone, for review / QC outside the summary
+    python3 ${params.splicing_html} \
+        --json  ${data.json} \
+        --out   ${meta.prefixRNA}.aberrantSplicing.report.html \
+        --mode  standalone
+    """
+}
 

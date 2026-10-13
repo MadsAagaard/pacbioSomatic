@@ -205,6 +205,7 @@ include {
     pigeon_classify;
     sqanti3_QC;
     pbfusion;
+    fusion_annotate;
     isocallProfile;
     isocallCall;
     oarFish;
@@ -213,6 +214,8 @@ include {
     ase_readcounter;
     expression_outlier;
     splicing_isoformswitch;
+    lrs_splice;             
+    lrs_splice_report;
 } from './modules/rnaModules.nf'
 
 
@@ -595,7 +598,7 @@ workflow RNA_TRANSCRIPTOME {
     take: preprocessFullOutput
     main:
         pigeon_classify(preprocessFullOutput)
-        sqanti3_QC(preprocessFullOutput)
+        //sqanti3_QC(preprocessFullOutput)
         //oarFish(preprocessFullOutput)
 
     emit:
@@ -603,7 +606,7 @@ workflow RNA_TRANSCRIPTOME {
         classification_lite = pigeon_classify.out.classification   // filtered_lite classification
         sortedGFF           = pigeon_classify.out.sortedGFF        // for ISA importGTF (splicing)
         pigeon              = pigeon_classify.out.pigeon
-        sqanti3             = sqanti3_QC.out.sqanti3QC
+        //sqanti3             = sqanti3_QC.out.sqanti3QC
         pigeonForSummary    = pigeon_classify.out.pigeon_reports_json
 }
 
@@ -611,11 +614,63 @@ workflow RNA_FUSION {
     take: preprocessFullOutput
     main:
         pbfusion(preprocessFullOutput)
-    emit:
-        fusion   = pbfusion.out.fusion
-        fusionForSummary = pbfusion.out.inhouse_fusion
-}
 
+        // fusion annotation -- TEST PHASE: annotates every pbfusion call
+        // (panel membership is a tag, not a filter); nothing reads the JSON yet
+        fusionAnnot = Channel.empty()
+        if (!params.skipFusionAnnotate) {
+            fusion_annotate(
+                pbfusion.out.bedpe,
+                file(params.fusion_annotation, checkIfExists: true),
+                file(params.fusion_domains,    checkIfExists: true),
+                file(params.fusion_gene_list,  checkIfExists: true)
+            )
+            fusionAnnot = fusion_annotate.out.json
+        }
+    emit:
+        fusion           = pbfusion.out.fusion
+        fusionForSummary = pbfusion.out.inhouse_fusion
+        fusionAnnot      = fusionAnnot      // (meta, *.fusion_annot.json)
+}
+workflow RNA_SPLICING {
+    take:
+        rna_bam            // (meta, bam, bai)   haplotagged if available
+        somatic_by_case    // (caseID, vcf)      DeepSomatic PASS; may be empty
+
+    main:
+        rna_bam
+            | map { meta, bam, bai -> [meta.id, meta, bam, bai] }
+            | join(somatic_by_case, remainder: true)     // + sVcf (null if absent)
+            | filter { it[1] != null && it[2] != null }  // drop somatic-only rows
+            | map { id, meta, bam, bai, sVcf ->
+                tuple(meta, [
+                    bam:        bam,
+                    bai:        bai,
+                    somaticVcf: (sVcf ?: [])             // [] -> linking skipped
+                ])
+            }
+            | set { splice_in }
+
+        // optional inputs: a real path, or [] (Nextflow stages nothing). Passed as
+        // path inputs, not strings, so -resume reruns when the store is updated.
+        def recDb     = params.splice_recurrenceDb     ? file(params.splice_recurrenceDb, checkIfExists: true)     : []
+        def recExempt = params.splice_recurrenceExempt ? file(params.splice_recurrenceExempt, checkIfExists: true) : []
+        lrs_splice(splice_in, recDb, recExempt)
+
+        lrs_splice.out.json
+            | map { meta, json -> tuple(meta, [json: json]) }
+            | set { splice_report_in }
+
+        lrs_splice_report(splice_report_in)
+
+    emit:
+        events  = lrs_splice.out.events                  // (meta, full TSV)
+        panel   = lrs_splice.out.panel                   // (meta, PASS-only TSV)
+        json    = lrs_splice.out.json
+        section = lrs_splice_report.out.section          // -> clinical_summaryRNA
+        html    = lrs_splice_report.out.html
+}
+/*
 workflow RNA_SUMMARY {
     take:
         isoseqForSummary
@@ -636,11 +691,50 @@ workflow RNA_SUMMARY {
 
 
 }
+*/
+workflow RNA_SUMMARY {
+    take:
+        isoseqForSummary
+        pigeonForSummary
+        fusionForSummary
+        spliceForSummary
+        fusionAnnotForSummary   // (meta, *.fusion_annot.json); Channel.empty() when not run
+    main:
+        spliceForSummary
+            | map { meta, json, html -> [meta.id, [json: json, html: html]] }
+            | set { splice_by_case }
+        fusionAnnotForSummary
+            | map { meta, json -> [meta.id, json] }
+            | set { annot_by_case }
 
+        isoseqForSummary.join(pigeonForSummary).join(fusionForSummary)
+            | map { meta, refine_json, pigeonFiltered_json, pigeonRaw_json, fusions ->
+                [meta.id, meta, refine_json, pigeonFiltered_json, pigeonRaw_json, fusions]
+            }
+            | join(splice_by_case, remainder: true)
+            | filter { it[1] != null }
+            | join(annot_by_case, remainder: true)
+            | filter { it[1] != null }
+            | map { id, meta, refine_json, pigeonFiltered_json, pigeonRaw_json, fusions, splice, annot ->
+                tuple(meta, [
+                    refineReportJSON: refine_json,
+                    pigeonFilteredJSON: pigeonFiltered_json,
+                    pigeonRawJSON: pigeonRaw_json,
+                    fusionInhouse: fusions,
+                    fusionAnnot:  (annot ?: []),
+                    spliceJSON:   (splice ? splice.json : []),
+                    spliceReport: (splice ? splice.html.name : null)
+                ])
+            }
+            | set { rna_summary_joined }
+        collect_clinical_summaryRNA(rna_summary_joined)
+}
 
 /* =============================================================================
  *  RNA ARM overall: 
  * ========================================================================== */
+
+/*
 workflow RNA_ARM {
     take: rna_ch
     main:
@@ -659,7 +753,27 @@ workflow RNA_ARM {
         sortedGFF            = RNA_TRANSCRIPTOME.out.sortedGFF
         fusion               = RNA_FUSION.out.fusion
 }
+*/
 
+workflow RNA_ARM {
+    take: rna_ch
+    main:
+        RNA_PREPROCESS(rna_ch)
+        RNA_TRANSCRIPTOME(RNA_PREPROCESS.out.preprocessFullOutput)
+        RNA_FUSION(RNA_PREPROCESS.out.preprocessFullOutput)
+        // RNA_SUMMARY is called by the entry workflows, after RNA_SPLICING
+        // (which needs the DNA arm), so the summary can include section 04.
+    emit:
+        isoseqForSummary     = RNA_PREPROCESS.out.isoseqForSummary
+        pigeonForSummary     = RNA_TRANSCRIPTOME.out.pigeonForSummary
+        fusionForSummary     = RNA_FUSION.out.fusionForSummary
+        preprocessFullOutput = RNA_PREPROCESS.out.preprocessFullOutput
+        refinedAlignedBam    = RNA_PREPROCESS.out.refinedAlignedBam   // -> RNA_HAPLOTAG (next)
+        classification       = RNA_TRANSCRIPTOME.out.classification
+        sortedGFF            = RNA_TRANSCRIPTOME.out.sortedGFF
+        fusion               = RNA_FUSION.out.fusion
+        fusionAnnot          = RNA_FUSION.out.fusionAnnot
+}
 
 /* =============================================================================
  *  CROSS-ARM SUBWORKFLOWS 1 (join key = caseID)
@@ -811,10 +925,24 @@ workflow {
             | set { somatic_by_case }
 
         RNA_HAPLOTAG(RNA_ARM.out.refinedAlignedBam, germline_by_case)
-        
 
-        
+
+        RNA_SPLICING(RNA_HAPLOTAG.out.haplotaggedBam, somatic_by_case)
+
+        RNA_SPLICING.out.json
+            | join(RNA_SPLICING.out.html)                         // (meta, json, report.html)
+            | set { splice_for_summary }
+
+        RNA_SUMMARY(
+            RNA_ARM.out.isoseqForSummary,
+            RNA_ARM.out.pigeonForSummary,
+            RNA_ARM.out.fusionForSummary,
+            splice_for_summary,
+            RNA_ARM.out.fusionAnnot
+        )
+
         if (params.somaticRNA) {
+
         RNA_SOMATIC(
             RNA_ARM.out.refinedAlignedBam,
             germline_by_case,
