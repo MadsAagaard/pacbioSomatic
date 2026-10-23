@@ -14,7 +14,7 @@ runID="${date}.${user}"
 
 single sample (preprocess, deepvariant, sawfish, hiphase, QC):
 
-${meta.npn}.${meta.sampletype}.${params.genome_version}.{toolname}.{filetype}
+${meta.npn}.${meta.sampletype}.${params.genomeVersion}.{toolname}.{filetype}
 
 metadata: [id, npnNormal, npnTumor, pcgr, type, npn]
 
@@ -63,7 +63,7 @@ process inputFiles_symlinks_ubam{
 process pbmm2_align_mergedData {
     label "veryHigh"
     tag "$meta.npn"
-    conda "${params.pbmm2}"
+    conda "${params.condaEnvs.pbmm2}"
 
 
     publishDir "${meta.id}/documents/", mode: 'copy',pattern: '*.fofn'
@@ -83,7 +83,7 @@ process pbmm2_align_mergedData {
     --num-threads ${task.cpus} \
     --bam-index BAI \
     --sample ${meta.npn} \
-    ${params.genome_mmi} \
+    ${params.genomeMmi} \
     ${fofn} \
     ${meta.prefix}.pbmm2.bam
     """
@@ -91,7 +91,7 @@ process pbmm2_align_mergedData {
 
 /*
     samtools view \
-    -T ${params.genome_fasta} \
+    -T ${params.genomeFasta} \
     -C \
     -o ${meta.prefix}.pbmm2.cram ${meta.prefix}.pbmm2.bam
 
@@ -115,9 +115,9 @@ process deepvariant{
     tuple val(meta), path("${meta.prefixNormal}.deepVariant.g.vcf.gz"), emit: dv_gvcf    
     //path("${meta.npn}.deepvariant.vcf_stats_report.txt")
     """
-    singularity run -B ${params.s_bind} ${params.simgpath}/${params.deepvariant_image} /opt/deepvariant/bin/run_deepvariant \
+    singularity run -B ${params.sBind} ${params.simgPath}/${params.deepvariantImage} /opt/deepvariant/bin/run_deepvariant \
     --model_type=PACBIO \
-    --ref=${params.genome_fasta} \
+    --ref=${params.genomeFasta} \
     --reads=${data.bamNormal}  \
     --output_vcf=${meta.prefixNormal}.deepVariant.vcf.gz \
     --output_gvcf=${meta.prefixNormal}.deepVariant.g.vcf.gz \
@@ -130,9 +130,9 @@ process deepvariant{
 process sawFish2{
     tag "$meta.npnNormal"
     label "high"
-    conda "${params.sawfish2}"
+    conda "${params.condaEnvs.sawfish2}"
 
-    //publishDir "${params.lrsStorageBase}/sawfish/", mode: 'copy', pattern:"*.sawfishSV.vcf.*"
+    //publishDir "${params.lrsStorage}/sawfish/", mode: 'copy', pattern:"*.sawfishSV.vcf.*"
 
     publishDir "${meta.id}/toolsOutputDNA/sawFish/sawfish_supporting_data/", mode: 'copy', pattern: "*.sawfishSV.*"
 
@@ -152,9 +152,9 @@ process sawFish2{
     """
     sawfish discover \
     --threads ${task.cpus} \
-    --ref ${params.genome_fasta} \
+    --ref ${params.genomeFasta} \
     --bam ${data.bamNormal} \
-    --cnv-excluded-regions ${params.cnv_exclude_sawfish} \
+    --cnv-excluded-regions ${params.sawfishExcludeRegions} \
     $sex \
     --output-dir ${meta.npnNormal}.normal.sawfishDiscover 
 
@@ -184,9 +184,9 @@ process sawFish2{
 process svdb_SawFish {
     tag "$meta.id"
     label "low"
-    conda "${params.svdb}"
+    conda "${params.condaEnvs.svdb}"
 
-    publishDir "${params.lrsStorageBase}/sawfish/", mode: 'copy',pattern: "*.sawfishSV.hiphase.svdb.vcf*"
+    publishDir "${params.lrsStorage}/sawfish/", mode: 'copy',pattern: "*.sawfishSV.hiphase.svdb.vcf*"
 
     publishDir {"${meta.id}/toolsOutputDNA/sawFish/"}, mode: 'copy', pattern: "*.sawfishSV.hiphase.svdb.*"
    // publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: '*.sawfishSV.hiphase.svdb.vcf*'
@@ -202,7 +202,7 @@ process svdb_SawFish {
     """
     svdb --query \
     --query_vcf ${data.sawfish_vcf} \
-    --sqdb ${params.sawfish_sqdb} > ${meta.prefixNormal}.sawfishSV.hiphase.svdb.vcf
+    --sqdb ${params.sawfishSvdb} > ${meta.prefixNormal}.sawfishSV.hiphase.svdb.vcf
     
     bgzip ${meta.prefixNormal}.sawfishSV.hiphase.svdb.vcf
     
@@ -218,7 +218,7 @@ process svdb_SawFish {
 process hiPhase {
     tag "$meta.id"
     label "intermediate"
-    conda "${params.hiphase}"
+    conda "${params.condaEnvs.hiphase}"
 
     publishDir "${meta.id}/alignments/", mode: 'copy', pattern: "*.hiphase.ba*"
     publishDir "${meta.id}/toolsOutputDNA/deepVariant/", mode: 'copy', pattern: "*.hiphase.deepvariant.*"
@@ -251,17 +251,17 @@ process hiPhase {
     --output-bam ${meta.prefixNormal}.hiphase.bam \
     --bam ${data.bamTumor} \
     --output-bam ${meta.prefixTumor}.hiphase.bam \
-    --reference ${params.genome_fasta} \
+    --reference ${params.genomeFasta} \
     --threads ${task.cpus} \
     --ignore-read-groups \
     --io-threads ${task.cpus}
 
     bcftools index -t -f ${meta.prefixNormal}.hiphase.deepvariant.vcf.gz 
 
-    ${params.gatk_exec} SelectVariants \
-    -R ${params.genome_fasta} \
+    ${params.gatkExec} SelectVariants \
+    -R ${params.genomeFasta} \
     -V  ${meta.prefixNormal}.hiphase.deepvariant.vcf.gz \
-    -L ${params.ROI} \
+    -L ${params.roiBed} \
     -O  ${meta.prefixNormal}.hiphase.deepvariant.WES_ROI.vcf.gz
 
     """
@@ -270,10 +270,10 @@ process hiPhase {
 process pbCPGtools{
     tag "$meta.prefix"
     label "medium"
-    conda "${params.pbCPGtools}"
+    conda "${params.condaEnvs.pbCPGtools}"
 
     publishDir "${meta.id}/toolsOutputDNA/methylation/pbCPGtools/", mode: 'copy', pattern: "*.methylation.{hap1,hap2,combined}.*"
-    //publishDir "${params.lrsStorageBase}/methylation/2025/${meta.id}/", mode: 'copy', pattern:"*.bed.*"
+    //publishDir "${params.lrsStorage}/methylation/2025/${meta.id}/", mode: 'copy', pattern:"*.bed.*"
 
 
     input:
@@ -293,7 +293,7 @@ process pbCPGtools{
 process methBat{
     tag "$meta.prefix"
     label "medium"
-    conda "${params.methbat}"
+    conda "${params.condaEnvs.methbat}"
 
     publishDir "${meta.id}/toolsOutputDNA/methylation/methBatOLD/", mode: 'copy'
 
@@ -311,7 +311,7 @@ process methBat{
 
     methbat profile \
     --input-prefix ${meta.prefix}.hiphase.methylation \
-    --input-regions ${params.methylationBackground} \
+    --input-regions ${params.methBackground} \
     --output-region-profile ${meta.prefix}.met.profile
 
     methbat deconvolve \
@@ -330,12 +330,12 @@ process methBat{
 process methBatNEW_pileup{
     tag "$meta.id"
     label "intermediateCPU"
-    conda "${params.methbat_v1}"
+    conda "${params.condaEnvs.methbatV1}"
 
     publishDir {"${meta.id}/toolsOutputDNA/methylation/5mC_pileup/"},   mode: 'copy',   pattern: "*.5mC.bed.*"
     publishDir {"${meta.id}/toolsOutputDNA/methylation/5mC_bedgraphs/"},   mode: 'copy',   pattern: "*.5mC.bedgraph.*"
 
-    publishDir "${params.lrsStorageBase}/methylationNEW/5mC_pileup/",   mode: 'copy',   pattern: "*.5mC.bed.*"
+    publishDir "${params.lrsStorage}/methylationNEW/5mC_pileup/",   mode: 'copy',   pattern: "*.5mC.bed.*"
 
   //  publishDir {"${params.outBase(meta)}/specialAnalysis/methylation/5hmC/"},  mode: 'copy',   pattern: "*.5hmC.bed.*"
    // publishDir {"${params.outBase(meta)}/specialAnalysis/methylation/6mA/"},   mode: 'copy',   pattern: "*.6mA.bed.*"
@@ -368,11 +368,11 @@ process methBatNEW_pileup{
 process methBatNEW_profile_single {
     tag "$meta.prefix"
     label "low"
-    conda "${params.methbat_v1}"
+    conda "${params.condaEnvs.methbatV1}"
 
     publishDir "${meta.id}/toolsOutputDNA/methylation/5mC_profile/",   mode: 'copy',   pattern: "*.5mC.cpgIslands.profile.tsv"
     publishDir "${meta.id}/toolsOutputDNA/methylation/5mC_CGI_profiles/", mode: 'copy', pattern:"*.profile.tsv"
-    publishDir "${params.lrsStorageBase}/methylationNEW/5mC_CGI_profiles/", mode: 'copy', pattern:"*.profile.tsv"
+    publishDir "${params.lrsStorage}/methylationNEW/5mC_CGI_profiles/", mode: 'copy', pattern:"*.profile.tsv"
     
     input:
     tuple val(meta), path(data), path(tbi)
@@ -383,7 +383,7 @@ process methBatNEW_profile_single {
     script:
     """
     methbat profile \
-    --input-regions ${params.methylationCpG_regions} \
+    --input-regions ${params.methCpGRegions} \
     --input-pileup ${data} \
     --output-region-profile ${meta.prefix}.met.5mC.cpgIslands.profile.tsv
     
@@ -405,7 +405,7 @@ process methBatNEW_profile_single {
 process mosdepthROI {
     tag "$meta.prefix"
     label "low"
-    conda "${params.mosdepth}"
+    conda "${params.condaEnvs.mosdepth}"
 
     publishDir "${meta.id}/QC/mosdepth/", mode: 'copy'
 
@@ -416,7 +416,7 @@ process mosdepthROI {
     tuple val(meta), path("${meta.prefix}_roi.*"),emit: mosdepth_roi
     tuple val(meta), path("*.region.dist.txt"), emit:multiqc
     script:
-    def callable=params.genome=="hg38" ? "--by ${params.CALLABLE_ROI}" : "--by 1000"
+    def callable=params.genome=="hg38" ? "--by ${params.callableRoiBed}" : "--by 1000"
     """
     mosdepth \
     -t ${task.cpus} \
@@ -429,7 +429,7 @@ process mosdepthROI {
 process cramino {
     tag "$meta.prefix"
     label "low"
-    conda "${params.cramino}"
+    conda "${params.condaEnvs.cramino}"
 
     publishDir {"${meta.id}/QC/cramino/"}, mode: 'copy'
 
@@ -459,7 +459,7 @@ process multiQC {
     publishDir "${meta.id}/QC/", mode: 'copy'
 
 
-    conda "${params.multiqc}"
+    conda "${params.condaEnvs.multiqc}"
 
     input:
     //path(inputfiles)
@@ -475,7 +475,7 @@ process multiQC {
     script:
     """
     multiqc \
-    -c ${params.multiqc_config} \
+    -c ${params.multiqcConfig} \
     -f -q ${launchDir}/${meta.id}/ \
     -n ${meta.prefixTN}.MultiQC.DNA.html
     """
@@ -510,9 +510,9 @@ process deepSomatic {
     
     script:
     """
-    singularity run -B ${params.s_bind} ${params.simgpath}/${params.deepsomatic_image} run_deepsomatic \
+    singularity run -B ${params.sBind} ${params.simgPath}/${params.deepsomaticImage} run_deepsomatic \
     --model_type=PACBIO \
-    --ref=${params.genome_fasta} \
+    --ref=${params.genomeFasta} \
     --reads_normal=${data.bamNormal} \
     --reads_tumor=${data.bamTumor} \
     --sample_name_normal=${meta.npnNormal} \
@@ -520,7 +520,7 @@ process deepSomatic {
     --output_vcf=${meta.prefixTN}.deepSomatic.vcf.gz \
     --output_gvcf=${meta.prefixTN}.deepSomatic.g.vcf.gz \
     --num_shards=${task.cpus} \
-    ##--regions ${params.ROI} \
+    ##--regions ${params.roiBed} \
     --logging_dir .
 
     bcftools view -f PASS ${meta.prefixTN}.deepSomatic.vcf.gz -Oz -o ${meta.prefixTN}.deepSomatic.PASS.vcf.gz
@@ -584,7 +584,7 @@ samtools reheader -P <(samtools view -H file.bam) file.bam > fixed.bam
 process severus {
     label "high"
     tag "$meta.id"
-    conda "${params.severus}"
+    conda "${params.condaEnvs.severus}"
 
     publishDir "${meta.id}/toolsOutputDNA/severus_somaticSV/", mode: 'copy'
 
@@ -602,7 +602,7 @@ process severus {
     --target-sample ${meta.npnTumor} \
     --control-bam ${data.bamNormal} \
     --control-sample ${meta.npnNormal} \
-    --vntr-bed ${params.vntr_severus} \
+    --vntr-bed ${params.severusVntrBed} \
     --phasing-vcf ${data.dv_vcf} \
     --threads ${task.cpus} \
     --use-supplementary-tag \
@@ -660,7 +660,7 @@ process severus_edits {
 process cobalt {
     label "high"
     tag "$meta.id"
-    conda "${params.hmftools}"
+    conda "${params.condaEnvs.hmftools}"
     publishDir "${meta.id}/toolsOutputDNA/hmftools/", mode: 'copy'
   
     input: 
@@ -676,10 +676,10 @@ process cobalt {
     -reference_bam ${data.bamNormal} \
     -tumor ${meta.npnTumor} \
     -tumor_bam ${data.bamTumor} \
-    -ref_genome ${params.genome_fasta} \
+    -ref_genome ${params.genomeFasta} \
     -output_dir cobalt \
     -threads ${task.cpus} \
-    -gc_profile ${params.hmftools_data_dir_v534}/copy_number/GC_profile.1000bp.38.cnp
+    -gc_profile ${params.hmftoolsDataDir}/copy_number/GC_profile.1000bp.38.cnp
 
     """
 }
@@ -688,7 +688,7 @@ process cobalt {
 process amber {
     label "medium"
     tag "$meta.id"
-    conda "${params.hmftools}"
+    conda "${params.condaEnvs.hmftools}"
 
     publishDir "${meta.id}/toolsOutputDNA/hmftools/", mode: 'copy'
 
@@ -705,11 +705,11 @@ process amber {
     -reference_bam ${data.bamNormal} \
     -tumor ${meta.npnTumor} \
     -tumor_bam ${data.bamTumor} \
-    -ref_genome ${params.genome_fasta} \
+    -ref_genome ${params.genomeFasta} \
     -output_dir amber \
     -threads ${task.cpus} \
     -ref_genome_version 38 \
-    -loci ${params.hmftools_data_dir_v534}/copy_number/GermlineHetPon.38.vcf.gz
+    -loci ${params.hmftoolsDataDir}/copy_number/GermlineHetPon.38.vcf.gz
     """
 }
 //    #mv amber/${meta.npnTumor}.amber.qc  amber/${meta.prefixTN}.amber.qc
@@ -717,7 +717,7 @@ process amber {
 process purple {
     label "high"
     tag "$meta.id"
-    conda "${params.purple}"
+    conda "${params.condaEnvs.purple}"
 
     publishDir "${meta.id}/toolsOutputDNA/hmftools/", mode: 'copy'
     //publishDir "${meta.id}/TUMORBOARDFILES/DNA/", mode: 'copy', pattern: "*.purity.tsv"
@@ -742,18 +742,18 @@ process purple {
     purple "-Xmx16G" \
     -reference ${meta.npnNormal} \
     -tumor ${meta.npnTumor} \
-    -ref_genome ${params.genome_fasta} \
+    -ref_genome ${params.genomeFasta} \
     -output_dir purple \
     -threads ${task.cpus} \
     -ref_genome_version 38 \
     -somatic_sv_vcf ${somatic_sv} \
     -somatic_vcf ${somatic_smallvar} \
-    -gc_profile ${params.hmftools_data_dir_v534}/copy_number/GC_profile.1000bp.38.cnp \
-    -ensembl_data_dir ${params.hmftools_data_dir_v534}/common/ensembl_data/ \
+    -gc_profile ${params.hmftoolsDataDir}/copy_number/GC_profile.1000bp.38.cnp \
+    -ensembl_data_dir ${params.hmftoolsDataDir}/common/ensembl_data/ \
     -amber ${amber} \
     -cobalt ${cobalt} \
-    -driver_gene_panel ${params.hmftools_data_dir_v534}/common/DriverGenePanel.38.tsv \
-    -somatic_hotspots ${params.hmftools_data_dir_v534}/variants/KnownHotspots.somatic.38.vcf.gz \
+    -driver_gene_panel ${params.hmftoolsDataDir}/common/DriverGenePanel.38.tsv \
+    -somatic_hotspots ${params.hmftoolsDataDir}/variants/KnownHotspots.somatic.38.vcf.gz \
     -circos /lnx01_data3/shared/programmer/miniconda3/envs/circos_purple/bin/circos
 
 
@@ -794,12 +794,12 @@ process owl_msi {
     tuple val(meta), path("*.owl-scores.txt"), emit: for_yaml_summary
     script:
     """
-    ${params.owl} profile \
+    ${params.owlBin} profile \
     --bam ${data.bam} \
-    --regions ${params.owl_markers} \
+    --regions ${params.owlMarkers} \
     --sample ${meta.npn} > ${meta.prefix}.owlMSI.txt
 
-    ${params.owl} score \
+    ${params.owlBin} score \
     --file ${meta.prefix}.owlMSI.txt \
     --prefix ${meta.prefix}_MSI
     """
@@ -808,7 +808,7 @@ process owl_msi {
 process hrd_scores {
     label "low"
     tag "$meta.id"
-    conda "${params.sigrap02}"
+    conda "${params.condaEnvs.sigrap02}"
 
     publishDir "${meta.id}/toolsOutputDNA/hrd_scores_sigrap/", mode: 'copy'
 
@@ -862,7 +862,7 @@ process hrd_scores {
 process scarhrd_purple {
     label "low"
     tag "$meta.id"
-    conda "${params.scarhrd}"
+    conda "${params.condaEnvs.scarhrd}"
 
     publishDir "${meta.id}/toolsOutputDNA/scarHRD/", mode: 'copy'
 
@@ -876,7 +876,7 @@ process scarhrd_purple {
 
     script:
     """
-    Rscript ${params.scarhrd_Rscript} \
+    Rscript ${params.scarhrdR} \
         --input  $purpleCNV \
         --sample ${meta.npnTumor} \
         --out    ${meta.prefixTN}.purple
@@ -887,7 +887,7 @@ process scarhrd_purple {
 process scarhrd_wakhan {
     label "low"
     tag "$meta.id"
-    conda "${params.scarhrd}"
+    conda "${params.condaEnvs.scarhrd}"
     publishDir "${meta.id}/toolsOutputDNA/scarHRD/", mode: 'copy'
 
     input:
@@ -899,15 +899,15 @@ process scarhrd_wakhan {
 
     script:
     def wakhanPloidy = meta.wakhanPloidy ?: 'NA'
-    def mincnq = params.scarhrd_wakhan_minCNQ ? "--min-cnq ${params.scarhrd_wakhan_minCNQ}" : ""
+    def mincnq = params.scarhrdWakhanMinCNQ ? "--min-cnq ${params.scarhrdWakhanMinCNQ}" : ""
     """
-    python3 ${params.wakhan_scarhrd_py} \
+    python3 ${params.wakhanScarhrdPy} \
         --vcf ${wakhanVCF} \
         --sample ${meta.npnTumor} \
         --out ${meta.prefixTN}.wakhan.scarHRD_input.tsv \
         ${mincnq}
 
-    Rscript ${params.scarhrd_Rscript} \
+    Rscript ${params.scarhrdR} \
         --input  ${meta.prefixTN}.wakhan.scarHRD_input.tsv \
         --sample ${meta.npnTumor} \
         --out    ${meta.prefixTN}.wakhan \
@@ -923,7 +923,7 @@ process scarhrd_wakhan {
 process scarhrd_wakhan_bed {
     label "low"
     tag "$meta.id"
-    conda "${params.scarhrd}"
+    conda "${params.condaEnvs.scarhrd}"
 
     publishDir "${meta.id}/toolsOutputDNA/scarHRD/", mode: 'copy'
 
@@ -939,12 +939,12 @@ process scarhrd_wakhan_bed {
     tuple val(meta), path("${meta.prefixTN}.wakhanBED.segmentationReport.json"), emit: summary_json
     script:
     def wakhanPloidy = meta.wakhanPloidy ?: 'NA'
-    def mincnq = params.scarhrd_wakhanBed_minCNQ     != null ? "--min-cnq ${params.scarhrd_wakhanBed_minCNQ}"          : ""
-    def mincov = params.scarhrd_wakhanBed_minCovFrac != null ? "--min-cov-frac ${params.scarhrd_wakhanBed_minCovFrac}" : ""
-    def minlen = params.scarhrd_wakhanBed_minSegLen  != null ? "--min-length ${params.scarhrd_wakhanBed_minSegLen}"    : ""
-    def excl   = (params.scarhrd_wakhanBed_excludeBeds ?: []).collect { return "--exclude-bed ${it}" }.join(' ')
+    def mincnq = params.scarhrdWakhanBedMinCNQ     != null ? "--min-cnq ${params.scarhrdWakhanBedMinCNQ}"          : ""
+    def mincov = params.scarhrdWakhanBedMinCovFrac != null ? "--min-cov-frac ${params.scarhrdWakhanBedMinCovFrac}" : ""
+    def minlen = params.scarhrdWakhanBedMinSegLen  != null ? "--min-length ${params.scarhrdWakhanBedMinSegLen}"    : ""
+    def excl   = (params.scarhrdWakhanBedExcludeBeds ?: []).collect { return "--exclude-bed ${it}" }.join(' ')
     """
-    python3 ${params.wakhan_scarhrd_bed_py} \
+    python3 ${params.wakhanScarhrdBedPy} \
         --bed-hp1     ${bedHP1} \
         --bed-hp2     ${bedHP2} \
         --sample      ${meta.npnTumor} \
@@ -954,7 +954,7 @@ process scarhrd_wakhan_bed {
         --report-json ${meta.prefixTN}.wakhanBED.segmentationReport.json \
         ${excl} ${mincnq} ${mincov} ${minlen}
 
-    Rscript ${params.scarhrd_Rscript} \
+    Rscript ${params.scarhrdR} \
         --input  ${meta.prefixTN}.wakhanBED.scarHRD_input.tsv \
         --sample ${meta.npnTumor} \
         --out    ${meta.prefixTN}.wakhanBED \
@@ -968,7 +968,7 @@ process scarhrd_wakhan_bed {
 process pcgr_v212_deepSomatic {
     tag "$meta.id"
     label 'medium'
-    conda "${params.pcgr212}"
+    conda "${params.condaEnvs.pcgr212}"
 
     publishDir "${meta.id}/toolsOutputDNA/PCGR212/", mode: 'copy', pattern: "*.pcgr.*"
     publishDir "${meta.id}/TUMORBOARDFILES/",mode: 'copy', pattern:"*.html"
@@ -986,10 +986,10 @@ process pcgr_v212_deepSomatic {
 
     pcgr \
     --input_vcf ${data[0]} \
-    --refdata_dir ${params.pcgr_data_dir3} \
+    --refdata_dir ${params.pcgrDataDir} \
     --output_dir . \
-    --vep_dir ${params.pcgr_VEP} \
-    --genome_assembly ${params.pcgr_assembly} \
+    --vep_dir ${params.pcgrVepDir} \
+    --genome_assembly ${params.pcgrAssembly} \
     --sample_id ${meta.id}_pcgr212 \
     --min_mutations_signatures 100 \
     --all_reference_signatures \
@@ -999,7 +999,7 @@ process pcgr_v212_deepSomatic {
     --exclude_dbsnp_nonsomatic \
     --assay WGS \
     --input_cna ${data[2]} \
-    --pcgrr_conda ${params.pcgrr212} \
+    --pcgrr_conda ${params.condaEnvs.pcgrr212} \
     --estimate_signatures \
     --tumor_site ${meta.pcgr}
     """
@@ -1008,13 +1008,13 @@ process pcgr_v212_deepSomatic {
 process collect_clinical_summary {
     label "low"
     tag "$meta.id"
-    conda "${params.somaticSummaryEnv}"  // needs pyyaml, pandas, python-calamine
+    conda "${params.condaEnvs.somaticSummaryEnv}"  // needs pyyaml, pandas, python-calamine
 
     publishDir "${meta.id}/TUMORBOARDFILES/", mode: 'copy', pattern: "*.clinical_summaryDNA.html"
     publishDir "${meta.id}/summaryFiles/", mode: 'copy', pattern: "*.clinical_summaryDNA.*"
    
-    publishDir "${params.lrsStorageBase}/clinicalSummaries/dna/json/", mode: 'copy', pattern: "*.clinical_summaryDNA.json"
-    publishDir "${params.lrsStorageBase}/clinicalSummaries/dna/yaml/", mode: 'copy', pattern: "*.clinical_summaryDNA.yaml"
+    publishDir "${params.lrsStorage}/clinicalSummaries/dna/json/", mode: 'copy', pattern: "*.clinical_summaryDNA.json"
+    publishDir "${params.lrsStorage}/clinicalSummaries/dna/yaml/", mode: 'copy', pattern: "*.clinical_summaryDNA.yaml"
 
     input:
     tuple val(meta), val(data)
@@ -1025,13 +1025,13 @@ process collect_clinical_summary {
     tuple val(meta), path("${meta.prefixTN}.clinical_summaryDNA.html"), emit: html
     script:
     """
-    python3 ${params.clinical_summary_py} \
+    python3 ${params.somaticDnaSummaryPy} \
         --pcgr-code          ${meta.pcgr} \
         --case-id            ${meta.id} \
         --npn-tumor          ${meta.npnTumor} \
         --npn-normal         ${meta.npnNormal} \
         --gender             ${meta.gender} \
-        --genome-version     ${params.genome_version} \
+        --genome-version     ${params.genomeVersion} \
         --amber              ${data.amberQC} \
         --cramino-tumor      ${data.cramino_t} \
         --cramino-normal     ${data.cramino_n} \
@@ -1053,8 +1053,8 @@ process collect_clinical_summary {
         --mutpattern-snv2015 ${data.snv2015Json} \
         --mutpattern-indel   ${data.indelJson} \
         --mutpattern-dbs     ${data.dbsJson} \
-        --cosmic-groups      ${params.cosmic_groups} \
-        --html-template      ${params.clinical_summary_html} \
+        --cosmic-groups      ${params.cosmicGroups} \
+        --html-template      ${params.somaticDnaSummaryHtml} \
         --output             ${meta.prefixTN}.clinical_summaryDNA
     """
 }
@@ -1062,7 +1062,7 @@ process collect_clinical_summary {
 process purple_genome_view {
     label "low"
     tag "$meta.id"
-    conda "${params.somaticSummaryEnv}"  // needs pyyaml, pandas, python-calamine
+    conda "${params.condaEnvs.somaticSummaryEnv}"  // needs pyyaml, pandas, python-calamine
    
     publishDir "${meta.id}/TUMORBOARDFILES/plots/", mode: 'copy'
 
@@ -1080,7 +1080,7 @@ process purple_genome_view {
         --amber ${data.amberBAF} \
         --out   ${meta.prefixTN}.purple_genome_view.html \
         --png   ${meta.prefixTN}.purple_genome_view.png \
-        --title "${meta.id} · ${params.genome_version}" \
+        --title "${meta.id} · ${params.genomeVersion}" \
         --dpi 180
     """
 }
@@ -1088,7 +1088,7 @@ process purple_genome_view {
 process wakhan {
     label "high"
     tag "$meta.id"
-    conda "${params.wakhan}"  // needs pyyaml, pandas, python-calamine
+    conda "${params.condaEnvs.wakhan}"  // needs pyyaml, pandas, python-calamine
     publishDir "${meta.id}/toolsOutputDNA/", mode: 'copy'
     publishDir "${meta.id}/TUMORBOARDFILES/plots/", mode: 'copy', pattern: "*.copynumbers_breakpoints*"
     publishDir "${meta.id}/TUMORBOARDFILES/varSeqImport/", mode: 'copy', pattern: "*_integers.vcf.*"
@@ -1111,13 +1111,13 @@ process wakhan {
     """
     wakhan all \
     --target-bam ${data.bamTumor} \
-    --reference ${params.genome_fasta} \
+    --reference ${params.genomeFasta} \
     --threads ${task.cpus} \
     --normal-phased-vcf ${data.dv_vcf} \
     --breakpoints ${data.severusVCF} \
     --pdf-enable \
-    --ploidy-range ${params.wakhan_ploidy_range} \
-    --purity-range ${params.wakhan_purity_range} \
+    --ploidy-range ${params.wakhanPloidyRange} \
+    --purity-range ${params.wakhanPurityRange} \
     --genome-name ${meta.prefixTN}.wakhan \
     --out-dir-plots wakhan
 
@@ -1141,7 +1141,7 @@ process alignmentLinks_tumorboard {
 
     script:
     def realDir = "${launchDir}/${meta.id}/alignments"
-    def tbDir   = "${launchDir}/${meta.id}/${params.tumorboard_align_subdir}"
+    def tbDir   = "${launchDir}/${meta.id}/${params.tumorboardAlignSubdir}"
     """
     mkdir -p '${tbDir}'
     for f in '${bamName}' '${baiName}'; do
@@ -1222,7 +1222,7 @@ process pbmm2_align {
     //publishDir "${params.outdir}/${runfolder_basename}/fastq_symlinks/", mode: 'link', pattern:'*.{fastq,fq}.gz'
     cpus 24
     maxForks 8
-    conda "${params.pbmm2}"
+    conda "${params.condaEnvs.pbmm2}"
 
     input:
     tuple val(meta), path(data)
@@ -1238,7 +1238,7 @@ process pbmm2_align {
     --num-threads ${task.cpus} \
     --bam-index BAI \
     --sample ${meta.npn} \
-    ${params.genome_mmi} \
+    ${params.genomeMmi} \
     ${data[0]} \
     ${meta.prefix}.pbmm2.bam
     """
@@ -1253,7 +1253,7 @@ process deepvariant{
     errorStrategy 'ignore'
     tag "$meta.id"
     publishDir "${meta.id}/deepVariant/", mode: 'copy'
-    //publishDir "${params.lrsStorageBase}/variants/2025/deepVariant/gvcf", mode: 'copy', pattern: "*.deepVariant.g.vcf.*"    
+    //publishDir "${params.lrsStorage}/variants/2025/deepVariant/gvcf", mode: 'copy', pattern: "*.deepVariant.g.vcf.*"    
     cpus 32
     maxForks 5
 
@@ -1261,16 +1261,16 @@ process deepvariant{
     tuple val(meta), val(data) // data from joined ch: [bamN:bamNormal,baiN:baiNormal,bamT:bamTumor,baiT:baiTumor] access as e.g. "data.bamN" 
 
     output:
-    tuple val(meta), path("${meta.npnNormal}.${params.genome_version}.deepVariant.vcf.gz"),path("${meta.npnNormal}.${params.genome_version}.deepVariant.vcf.gz.tbi"), emit: dv_vcf
-    tuple val(meta), path("${meta.npnNormal}.${params.genome_version}.deepVariant.g.vcf.gz"), emit: dv_gvcf    
+    tuple val(meta), path("${meta.npnNormal}.${params.genomeVersion}.deepVariant.vcf.gz"),path("${meta.npnNormal}.${params.genomeVersion}.deepVariant.vcf.gz.tbi"), emit: dv_vcf
+    tuple val(meta), path("${meta.npnNormal}.${params.genomeVersion}.deepVariant.g.vcf.gz"), emit: dv_gvcf    
     //path("${meta.npnNormal}.deepvariant.vcf_stats_report.txt")
     """
-    singularity run -B ${params.s_bind} ${params.simgpath}/deepvariant180.sif /opt/deepvariant/bin/run_deepvariant \
+    singularity run -B ${params.sBind} ${params.simgPath}/deepvariant180.sif /opt/deepvariant/bin/run_deepvariant \
     --model_type=PACBIO \
-    --ref=${params.genome_fasta} \
+    --ref=${params.genomeFasta} \
     --reads=${data.bamN} \
-    --output_vcf=${meta.npnNormal}.${params.genome_version}.deepVariant.vcf.gz \
-    --output_gvcf=${meta.npnNormal}.${params.genome_version}.deepVariant.g.vcf.gz \
+    --output_vcf=${meta.npnNormal}.${params.genomeVersion}.deepVariant.vcf.gz \
+    --output_gvcf=${meta.npnNormal}.${params.genomeVersion}.deepVariant.g.vcf.gz \
     --num_shards=${task.cpus}
     """    
 }
@@ -1281,7 +1281,7 @@ process sawFish2{
     errorStrategy 'ignore'
     cpus 16
     maxForks 5
-    //publishDir "${params.lrsStorageBase}/structuralVariants/2025/sawfish/", mode: 'copy', pattern:"*.sawfishSV.vcf.*"
+    //publishDir "${params.lrsStorage}/structuralVariants/2025/sawfish/", mode: 'copy', pattern:"*.sawfishSV.vcf.*"
 
     publishDir "${meta.id}/CNV_and_SV/sawfish/", mode: 'copy', pattern: "*.sawfishSV.*"
 
@@ -1300,9 +1300,9 @@ process sawFish2{
     """
     sawfish discover \
     --threads ${task.cpus} \
-    --ref ${params.genome_fasta} \
+    --ref ${params.genomeFasta} \
     --bam ${data.bamN} \
-    --cnv-excluded-regions ${params.cnv_exclude_sawfish} \
+    --cnv-excluded-regions ${params.sawfishExcludeRegions} \
     --output-dir ${meta.id}.sawfishDiscover 
 
     sawfish joint-call \

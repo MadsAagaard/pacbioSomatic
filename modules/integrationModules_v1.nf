@@ -31,7 +31,7 @@ process alignmentLinks_tumorboard {
 
     script:
     def realDir = "${launchDir}/${meta.id}/alignments"
-    def tbDir   = "${launchDir}/${meta.id}/${params.tumorboard_align_subdir}"
+    def tbDir   = "${launchDir}/${meta.id}/${params.tumorboardAlignSubdir}"
     """
     mkdir -p '${tbDir}'
     for f in '${bamName}' '${baiName}'; do
@@ -47,7 +47,7 @@ process alignmentLinks_tumorboard {
 process methylation_expression {
     label 'low'
     tag "$meta.id"
-    conda "${params.integrationEnv}"              // python3 + pandas + numpy
+    conda "${params.condaEnvs.integration}"              // python3 + pandas + numpy
 
     publishDir "${meta.id}/toolsOutputRNA/integration/methylExpr/", mode: 'copy', pattern: "*.methylExpr*.tsv"
     publishDir "${meta.id}/TUMORBOARDFILES/RNA/",        mode: 'copy', pattern: "*.methylExpr.panel.tsv"
@@ -60,22 +60,22 @@ process methylation_expression {
     tuple val(meta), path("${meta.prefixRNA}.methylExpr.panel.tsv"), emit: panel, optional: true
 
     script:
-    def genelist = params.methylExpr_genelist ? "--genelist ${params.methylExpr_genelist}" : ""
+    def genelist = params.methylExprGenelist ? "--genelist ${params.methylExprGenelist}" : ""
     """
-    python3 ${params.methyl_expr_py} \
-        --gtf         ${params.gencode_gtf} \
+    python3 ${params.methylExprPy} \
+        --gtf         ${params.gencodeV49Gtf} \
         --tumor-meth  ${data.tumorBed} \
         --normal-meth ${data.normalBed} \
         --expression  ${data.geneCounts} \
         --sample      ${meta.prefixRNA} \
         --out         ${meta.prefixRNA} \
-        --upstream    ${params.promoter_up} \
-        --downstream  ${params.promoter_down} \
-        --meth-col    ${params.meth_col} \
-        --cov-col     ${params.meth_cov_col} \
-        --min-cov     ${params.meth_minCov} \
-        --hyper       ${params.meth_hyper} \
-        --delta       ${params.meth_delta} \
+        --upstream    ${params.promoterUp} \
+        --downstream  ${params.promoterDown} \
+        --meth-col    ${params.methCol} \
+        --cov-col     ${params.methCovCol} \
+        --min-cov     ${params.methMinCov} \
+        --hyper       ${params.methHyper} \
+        --delta       ${params.methDelta} \
         ${genelist}
     """
 }
@@ -84,7 +84,7 @@ process methylation_expression {
 process fusion_sv_concordance {
     label 'low'
     tag "$meta.id"
-    conda "${params.integrationEnv}"              // python3 + numpy
+    conda "${params.condaEnvs.integration}"              // python3 + numpy
 
     publishDir "${meta.id}/toolsOutputRNA/fusionSV_integration/", mode: 'copy', pattern: "*.fusionSV.tsv"
     publishDir "${meta.id}/TUMORBOARDFILES/RNA/",      mode: 'copy', pattern: "*.fusionSV.tsv"
@@ -97,11 +97,11 @@ process fusion_sv_concordance {
 
     script:
     """
-    python3 ${params.fusion_sv_py} \
+    python3 ${params.fusionSvPy} \
         --fusion ${data.fusionBed} \
         --sv     ${data.sv} \
         --sample ${meta.prefixRNA} \
         --out    ${meta.prefixRNA} \
-        --window ${params.fusion_sv_window}
+        --window ${params.fusionSvWindow}
     """
 }
