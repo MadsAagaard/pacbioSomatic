@@ -901,6 +901,9 @@ skipRNA       : ${params.skipRNA}
 Samplesheet   : ${params.samplesheet}
 RunID         : ${runID}
 workDir       : ${workflow.workDir}
+error mode    : ${params.errorMode}
+lrsShared     : ${params.lrsSharedDir}
+lrsCustomTools: ${params.lrsCustomToolsBase}
 """
 
 
@@ -972,4 +975,41 @@ workflow DNA {
 workflow RNA {
     if (params.skipRNA) { exit 1, "RNA entry called with --skipRNA set." }
     RNA_ARM(rna_ch)
+}
+
+
+/* =============================================================================
+ *  COMPLETION
+ * ========================================================================== */
+workflow.onComplete {
+
+    // ---- failure manifest (same as germline and PTCP) -----------------------
+    // errorMode = 'cohort' (the somatic default) lets a failed task be ignored
+    // so the rest of the run finishes. That is only acceptable if the skip is
+    // recorded somewhere a human will see it.
+    def failed = (workflow.stats.failedCount ?: 0) + (workflow.stats.ignoredCount ?: 0)
+
+    if (failed > 0) {
+        try {
+            def f = file("${params.outputDirBase}/runInfo/${params.dateStamp}_${params.ssBase}/FAILED_TASKS.somatic.txt")
+            f.parent.mkdirs()
+            f.text = """\
+                Run          : ${workflow.runName}
+                Completed    : ${workflow.complete}
+                Succeeded    : ${workflow.stats.succeedCount}
+                Failed       : ${workflow.stats.failedCount}
+                Ignored      : ${workflow.stats.ignoredCount}
+                Error mode   : ${params.errorMode}
+                Launch dir   : ${workflow.launchDir}
+
+                Per-task detail is in the trace file under NextflowReports/.
+                Output for the affected samples is INCOMPLETE and must not be
+                reported without review.
+                """.stripIndent()
+            log.warn "*** ${failed} task(s) failed or were ignored — see ${f} ***"
+        }
+        catch (Exception e) {
+            log.warn "Could not write FAILED_TASKS.somatic.txt: ${e.message}"
+        }
+    }
 }
