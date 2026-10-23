@@ -20,7 +20,7 @@ user  = "$USER"
 runID = "${date}.${user}"
  
 // -------------------------- naming (single source) ---------------------------
-//def samplePrefix = { npn, sampletype -> "${npn}.${sampletype}.${params.genome_version}.${params.readSet}" }
+//def samplePrefix = { npn, sampletype -> "${npn}.${sampletype}.${params.genomeVersion}.${params.readSet}" }
 
 def pcgrTag = { pcgr ->
     def code = pcgr?.toString()?.trim()
@@ -29,11 +29,11 @@ def pcgrTag = { pcgr ->
 
 def samplePrefix = { npn, sampletype, pcgr = null ->
     def tag = (sampletype in ['tumor', 'rna']) ? pcgrTag(pcgr) : ''
-    "${npn}.${sampletype}${tag}.${params.genome_version}.${params.readSet}"
+    "${npn}.${sampletype}${tag}.${params.genomeVersion}.${params.readSet}"
 }
 
 def tnPrefix = { id, pcgr = null ->
-    "${id}${pcgrTag(pcgr)}.${params.genome_version}.${params.readSet}"
+    "${id}${pcgrTag(pcgr)}.${params.genomeVersion}.${params.readSet}"
 }
 // 
 def isMissing = { v -> (v == null) || (v.toString().trim().toLowerCase() in ['', 'na', '-', '.', 'null']) }
@@ -45,12 +45,12 @@ def samplePrefix = { npn, sampletype, pcgr = null ->
     def code    = pcgr?.toString()?.trim()
     def useCode = code && !(code.toLowerCase() in ['', 'na', '-', '.', 'null'])
     def tag     = (sampletype in ['tumor', 'rna'] && useCode) ? ".pcgr_${code}" : ''
-    "${npn}.${sampletype}${tag}.${params.genome_version}.${params.readSet}"
+    "${npn}.${sampletype}${tag}.${params.genomeVersion}.${params.readSet}"
 }
 
-def tnPrefix     = { id  -> "${id}.${params.genome_version}.${params.readSet}" }
+def tnPrefix     = { id  -> "${id}.${params.genomeVersion}.${params.readSet}" }
 
-def rnaPrefix    = { id, npn            -> "${npn}.${params.genome_version}.rna" }
+def rnaPrefix    = { id, npn            -> "${npn}.${params.genomeVersion}.rna" }
 
 def isMissing = { v -> (v == null) || (v.toString().trim().toLowerCase() in ['', 'na', '-', '.', 'null']) }
 */
@@ -64,7 +64,7 @@ def dnaInputBam
 if (params.inputDNA) {
     dnaInputBam = params.allReads ? "${params.inputDNA}/*.bam" : "${params.inputDNA}/*.hifi_reads.*.bam"
 } else {
-    dnaInputBam = params.allReads ? "${params.dataArchiveDNA}/**/*.bam" : "${params.dataArchiveDNA}/**/*.hifi_reads.*.bam"
+    dnaInputBam = params.allReads ? "${params.dataArchive}/**/*.bam" : "${params.dataArchive}/**/*.hifi_reads.*.bam"
 }
 
 // ---- RNA demux ubams: <archive>/<run>/rna_demultiplex/<npn>.*.lima.*.SMfixed.bam ----
@@ -621,9 +621,9 @@ workflow RNA_FUSION {
         if (!params.skipFusionAnnotate) {
             fusion_annotate(
                 pbfusion.out.bedpe,
-                file(params.fusion_annotation, checkIfExists: true),
-                file(params.fusion_domains,    checkIfExists: true),
-                file(params.fusion_gene_list,  checkIfExists: true)
+                file(params.fusionAnnotation, checkIfExists: true),
+                file(params.fusionDomains,    checkIfExists: true),
+                file(params.fusionGeneList,  checkIfExists: true)
             )
             fusionAnnot = fusion_annotate.out.json
         }
@@ -653,8 +653,8 @@ workflow RNA_SPLICING {
 
         // optional inputs: a real path, or [] (Nextflow stages nothing). Passed as
         // path inputs, not strings, so -resume reruns when the store is updated.
-        def recDb     = params.splice_recurrenceDb     ? file(params.splice_recurrenceDb, checkIfExists: true)     : []
-        def recExempt = params.splice_recurrenceExempt ? file(params.splice_recurrenceExempt, checkIfExists: true) : []
+        def recDb     = params.spliceRecurrenceDb     ? file(params.spliceRecurrenceDb, checkIfExists: true)     : []
+        def recExempt = params.spliceRecurrenceExempt ? file(params.spliceRecurrenceExempt, checkIfExists: true) : []
         lrs_splice(splice_in, recDb, recExempt)
 
         lrs_splice.out.json
@@ -893,14 +893,17 @@ log.info """\
 KG Vejle: PacBio LRS  DNA(T-N somatic) + RNA(Kinnex)  v2
 ======================================================
 Genome        : ${params.genome}
-Genome FASTA  : ${params.genome_fasta}
-Genome ver.   : ${params.genome_version}
-ROI           : ${params.ROI}
-GATK image    : ${params.gatk_image}
+Genome FASTA  : ${params.genomeFasta}
+Genome ver.   : ${params.genomeVersion}
+ROI           : ${params.roiBed}
+GATK image    : ${params.gatkImage}
 skipRNA       : ${params.skipRNA}
 Samplesheet   : ${params.samplesheet}
 RunID         : ${runID}
 workDir       : ${workflow.workDir}
+error mode    : ${params.errorMode}
+lrsShared     : ${params.lrsSharedDir}
+lrsCustomTools: ${params.lrsCustomToolsBase}
 """
 
 
@@ -972,4 +975,41 @@ workflow DNA {
 workflow RNA {
     if (params.skipRNA) { exit 1, "RNA entry called with --skipRNA set." }
     RNA_ARM(rna_ch)
+}
+
+
+/* =============================================================================
+ *  COMPLETION
+ * ========================================================================== */
+workflow.onComplete {
+
+    // ---- failure manifest (same as germline and PTCP) -----------------------
+    // errorMode = 'cohort' (the somatic default) lets a failed task be ignored
+    // so the rest of the run finishes. That is only acceptable if the skip is
+    // recorded somewhere a human will see it.
+    def failed = (workflow.stats.failedCount ?: 0) + (workflow.stats.ignoredCount ?: 0)
+
+    if (failed > 0) {
+        try {
+            def f = file("${params.outputDirBase}/runInfo/${params.dateStamp}_${params.ssBase}/FAILED_TASKS.somatic.txt")
+            f.parent.mkdirs()
+            f.text = """\
+                Run          : ${workflow.runName}
+                Completed    : ${workflow.complete}
+                Succeeded    : ${workflow.stats.succeedCount}
+                Failed       : ${workflow.stats.failedCount}
+                Ignored      : ${workflow.stats.ignoredCount}
+                Error mode   : ${params.errorMode}
+                Launch dir   : ${workflow.launchDir}
+
+                Per-task detail is in the trace file under NextflowReports/.
+                Output for the affected samples is INCOMPLETE and must not be
+                reported without review.
+                """.stripIndent()
+            log.warn "*** ${failed} task(s) failed or were ignored — see ${f} ***"
+        }
+        catch (Exception e) {
+            log.warn "Could not write FAILED_TASKS.somatic.txt: ${e.message}"
+        }
+    }
 }
