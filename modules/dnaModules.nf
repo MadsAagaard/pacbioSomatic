@@ -1151,6 +1151,42 @@ process alignmentLinks_tumorboard {
     """
 }
 
+process cna_consensus {
+    label "low"
+    tag "$meta.id"
+    conda "${params.condaEnvs.integration}"     // somaticSummaryEnv: python3 + numpy + matplotlib (+ pysam for the BAM)
+
+    publishDir "${meta.id}/toolsOutputDNA/cnaConsensus/", mode: 'copy'
+    publishDir "${meta.id}/TUMORBOARDFILES/cna/",         mode: 'copy', pattern: "*.cnaConsensus.{html,json,genes.tsv}"
+
+    input:
+    tuple val(meta), val(data)      // data: purpleDir, wakhanDir, vcf, metNormal, metTumor, bamTumor
+
+    output:
+    tuple val(meta), path("${meta.prefixTN}.cnaConsensus.json"),                                                  emit: json
+    tuple val(meta), path("${meta.prefixTN}.cnaConsensus.segments.tsv"), path("${meta.prefixTN}.cnaConsensus.genes.tsv"), emit: tables
+    tuple val(meta), path("${meta.prefixTN}.cnaConsensus.html"),                                                  emit: html
+    tuple val(meta), path("${meta.prefixTN}.cnaConsensus.phased_snvs.tsv"),                                       emit: phased, optional: true
+
+    script:
+    def metT   = data.metTumor  ? "--met-tumor ${data.metTumor}"   : ""
+    def metN   = data.metNormal ? "--met-normal ${data.metNormal}" : ""
+    def bam    = (params.cnaUseTumorBam && data.bamTumor) ? "--tumor-bam ${data.bamTumor}" : ""
+    def scoreP = params.cnaScorePhased ? "--score-phased" : ""
+    """
+    python3 ${params.cnaConsensusPy} run \\
+        --sample      ${meta.prefixTN} \\
+        --out         ${meta.prefixTN}.cnaConsensus \\
+        --sex         ${meta.gender} \\
+        --pcgr-code   ${meta.pcgr} \\
+        --purple-dir  ${data.purpleDir} \\
+        --wakhan-dir  ${data.wakhanDir} \\
+        --vcf         ${data.vcf} \\
+        --genelist    ${params.cnaGenelist} \\
+        --rules       ${params.cnaRulesTsv} \\
+        ${metT} ${metN} ${bam} ${scoreP}
+    """
+}
 
 
 

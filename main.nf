@@ -192,6 +192,7 @@ include {
     purple_genome_view;
     wakhan;
     alignmentLinks_tumorboard;
+    cna_consensus;
 } from './modules/dnaModules.nf'
 
 
@@ -438,6 +439,26 @@ workflow DNA_SOMATIC {
             | set { methbat_for_yaml_ch }
 
 
+        purple.out.purpleDir                    | map { meta, dir  -> [meta.id, meta, dir] }
+            | join( wakhan.out.wakhanDir        | map { meta, dir  -> [meta.id, dir] } )
+            | join( deepSomatic_edits.out.vcf   | map { meta, vcf  -> [meta.id, vcf] } )
+            | join( methbat_for_yaml_ch )                                   // (id, normalJson, tumorJson)
+            | join( phasedAll                   | map { meta, data -> [meta.id, data.bamTumor] } )
+            | map { id, meta, purpleDir, wakhanDir, vcf, metN, metT, bamT ->
+                tuple(meta, [
+                    purpleDir: purpleDir,
+                    wakhanDir: wakhanDir,
+                    vcf:       vcf,
+                    metNormal: metN,
+                    metTumor:  metT,
+                    bamTumor:  bamT
+                ])
+            }
+            | set { cna_consensus_input_ch }
+
+        cna_consensus(cna_consensus_input_ch)
+
+
         amber.out.for_yaml_summary
             | map { meta, amberQC, amberBAF -> [meta.id, meta, amberQC, amberBAF] }
             | join( purple.out.for_yaml_summary | map { meta, pur, dr, cnv -> [meta.id, pur, dr, cnv] } )
@@ -498,6 +519,7 @@ workflow DNA_SOMATIC {
         methylBedByCase  = methyl_bed_by_case           // (caseID, normalBed, tumorBed) — for INTEGRATION
         severusSV        = severus_edits.out.vcf         // (meta, somatic SV vcf) — for fusion x SV
         clinicalSummary  = collect_clinical_summary.out.json
+        cnaConsensus     = cna_consensus.out.json            // (meta, json)
 }
 
 
