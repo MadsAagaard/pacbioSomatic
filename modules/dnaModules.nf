@@ -1127,6 +1127,51 @@ process wakhan {
     """
 }
 
+process wakhan05 {
+    label "high"
+    tag "$meta.id"
+    conda "${params.condaEnvs.wakhan05}"  // needs pyyaml, pandas, python-calamine
+    publishDir "${meta.id}/toolsOutputDNA/", mode: 'copy'
+    publishDir "${meta.id}/TUMORBOARDFILES/TESTVERSIONS/plots/", mode: 'copy', pattern: "*.copynumbers_breakpoints*"
+    publishDir "${meta.id}/TUMORBOARDFILES/TESTVERSIONS/varSeqImport/", mode: 'copy', pattern: "*_integers.vcf.*"
+
+    input:
+    tuple val(meta), val(data)
+
+    output:
+    tuple val(meta), path("wakhan05/"), emit: wakhanDir
+    tuple val(meta), path("wakhan05/${meta.prefixTN}.wakhan05.solutions_ranks.tsv"), emit: wakhanTSV
+
+    tuple val(meta), path("wakhan05/solution_1/vcf_output/*_cna_integers.vcf"), emit: vcf
+    tuple val(meta),
+          path("wakhan05/solution_1/bed_output/*_copynumbers_segments_HP_1.bed"),
+          path("wakhan05/solution_1/bed_output/*_copynumbers_segments_HP_2.bed"), emit: cnBed
+
+    tuple val(meta), path("wakhan05/solution_1/*_copynumbers_breakpoints*"), emit: plots
+
+    script:
+    """
+    wakhan all \
+    --target-bam ${data.bamTumor} \
+    --reference ${params.genomeFasta} \
+    --threads ${task.cpus} \
+    --normal-phased-vcf ${data.dv_vcf} \
+    --breakpoints ${data.severusVCF} \
+    --pdf-enable \
+    --ploidy-range ${params.wakhanPloidyRange} \
+    --purity-range ${params.wakhanPurityRange} \
+    --genome-name ${meta.prefixTN}.wakhan05 \
+    --out-dir-plots wakhan05
+
+    mv wakhan05/solutions_ranks.tsv wakhan05/${meta.prefixTN}.wakhan05.solutions_ranks.tsv
+    cp wakhan05/solution_1/vcf_output/*_integers.vcf .
+    bgzip *_integers.vcf
+    tabix -p vcf *_integers.vcf.gz
+    """
+}
+
+
+
 
 process alignmentLinks_tumorboard {
     label 'low'

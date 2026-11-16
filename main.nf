@@ -191,6 +191,7 @@ include {
     collect_clinical_summary;
     purple_genome_view;
     wakhan;
+    wakhan05;
     alignmentLinks_tumorboard;
     cna_consensus;
 } from './modules/dnaModules.nf'
@@ -384,6 +385,7 @@ workflow DNA_SOMATIC {
 
 
         wakhan(phasedAll_with_severusVCF)
+        wakhan05(phasedAll_with_severusVCF)
         purple(purple_pass_input)
 
         // HRD
