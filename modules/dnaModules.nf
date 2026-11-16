@@ -1141,13 +1141,14 @@ process wakhan05 {
     output:
     tuple val(meta), path("wakhan05/"), emit: wakhanDir
     tuple val(meta), path("wakhan05/${meta.prefixTN}.wakhan05.solutions_ranks.tsv"), emit: wakhanTSV
+    tuple val(meta), path("${meta.prefixTN}.wakhan05.rank1.integer.vcf.gz"), emit: vcf
 
-    tuple val(meta), path("wakhan05/solution_1/vcf_output/*_cna_integers.vcf"), emit: vcf
-    tuple val(meta),
-          path("wakhan05/solution_1/bed_output/*_copynumbers_segments_HP_1.bed"),
-          path("wakhan05/solution_1/bed_output/*_copynumbers_segments_HP_2.bed"), emit: cnBed
+    //tuple val(meta), path("wakhan05/solution_1/vcf_output/*_cna_integers.vcf"), emit: vcf
+    //tuple val(meta),
+      //    path("wakhan05/solution_1/bed_output/*_copynumbers_segments_HP_1.bed"),
+        //  path("wakhan05/solution_1/bed_output/*_copynumbers_segments_HP_2.bed"), emit: cnBed
 
-    tuple val(meta), path("wakhan05/solution_1/*_copynumbers_breakpoints*"), emit: plots
+    //tuple val(meta), path("wakhan05/solution_1/*_copynumbers_breakpoints*"), emit: plots
 
     script:
     """
@@ -1157,6 +1158,7 @@ process wakhan05 {
     --threads ${task.cpus} \
     --normal-phased-vcf ${data.dv_vcf} \
     --breakpoints ${data.severusVCF} \
+    --use-sv-haplotypes \
     --pdf-enable \
     --ploidy-range ${params.wakhanPloidyRange} \
     --purity-range ${params.wakhanPurityRange} \
@@ -1164,9 +1166,9 @@ process wakhan05 {
     --out-dir-plots wakhan05
 
     mv wakhan05/solutions_ranks.tsv wakhan05/${meta.prefixTN}.wakhan05.solutions_ranks.tsv
-    cp wakhan05/solution_1/vcf_output/*_integers.vcf .
-    bgzip *_integers.vcf
-    tabix -p vcf *_integers.vcf.gz
+    cp wakhan05/solution_rank_1/integer_profile.vcf ${meta.prefixTN}.wakhan05.rank1.integer.vcf
+    bgzip ${meta.prefixTN}.wakhan05.rank1.integer.vcf
+    tabix -p vcf ${meta.prefixTN}.wakhan05.rank1.integer.vcf.gz
     """
 }
 
