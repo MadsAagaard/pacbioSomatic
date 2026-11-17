@@ -194,6 +194,7 @@ include {
     wakhan05;
     alignmentLinks_tumorboard;
     cna_consensus;
+    somatic_circos;
 } from './modules/dnaModules.nf'
 
 
@@ -459,6 +460,32 @@ workflow DNA_SOMATIC {
             | set { cna_consensus_input_ch }
 
         cna_consensus(cna_consensus_input_ch)
+
+        // somatic genome overview circos (TEST PHASE): interactive HTML (+ PNG/SVG) per case
+        if (!params.skipSomaticCircos) {
+            cna_consensus.out.json                  | map { meta, j -> [meta.id, meta, j] }
+                | join( cna_consensus.out.tables    | map { meta, seg, genes -> [meta.id, seg, genes] } )
+                | join( purple.out.purpleDir        | map { meta, dir -> [meta.id, dir] } )
+                | join( wakhan.out.wakhanDir        | map { meta, dir -> [meta.id, dir] } )
+                | join( amber.out.for_yaml_summary  | map { meta, qc, baf -> [meta.id, baf] } )
+                | join( deepSomatic_edits.out.vcf   | map { meta, vcf -> [meta.id, vcf] } )
+                | join( severus_edits.out.vcf       | map { meta, vcf -> [meta.id, vcf] } )
+                | map { id, meta, cnaJson, seg, genes, purpleDir, wakhanDir, amberBAF, vcf, svVcf ->
+                    tuple(meta, [
+                        cnaJson:     cnaJson,
+                        cnaSegments: seg,
+                        cnaGenes:    genes,
+                        purpleDir:   purpleDir,
+                        wakhanDir:   wakhanDir,
+                        amberBAF:    amberBAF,
+                        vcf:         vcf,
+                        svVcf:       svVcf
+                    ])
+                }
+                | set { somatic_circos_input_ch }
+
+            somatic_circos(somatic_circos_input_ch)
+        }
 
 
         amber.out.for_yaml_summary

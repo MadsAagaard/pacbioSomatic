@@ -1234,6 +1234,41 @@ process cna_consensus {
     """
 }
 
+process somatic_circos {
+    label "low"
+    tag "$meta.id"
+    conda "${params.condaEnvs.circos}"      // python3 (+ playwright/chromium for PNG/SVG)
+
+    publishDir "${meta.id}/toolsOutputDNA/somaticCircos/", mode: 'copy'
+    publishDir "${meta.id}/TUMORBOARDFILES/plots/",        mode: 'copy', pattern: "*.somaticCircos.{html,png}"
+
+    input:
+    tuple val(meta), val(data)      // data: cnaJson, cnaSegments, cnaGenes, purpleDir, wakhanDir, amberBAF, vcf, svVcf
+
+    output:
+    tuple val(meta), path("${meta.prefixTN}.somaticCircos.html"), emit: html
+    tuple val(meta), path("${meta.prefixTN}.somaticCircos.json"), emit: json
+    tuple val(meta), path("${meta.prefixTN}.somaticCircos.png"),  emit: png, optional: true
+    tuple val(meta), path("${meta.prefixTN}.somaticCircos.svg"),  emit: svg, optional: true
+
+    script:
+    """
+    python3 ${params.somaticCircosPy} \\
+        --sample       ${meta.prefixTN} \\
+        --out          ${meta.prefixTN}.somaticCircos \\
+        --sex          ${meta.gender} \\
+        --cna-json     ${data.cnaJson} \\
+        --cna-segments ${data.cnaSegments} \\
+        --cna-genes    ${data.cnaGenes} \\
+        --purple-dir   ${data.purpleDir} \\
+        --wakhan-dir   ${data.wakhanDir} \\
+        --amber-baf    ${data.amberBAF} \\
+        --vcf          ${data.vcf} \\
+        --sv-vcf       ${data.svVcf} \\
+        --static       ${params.somaticCircosStatic}
+    """
+}
+
 
 
 
