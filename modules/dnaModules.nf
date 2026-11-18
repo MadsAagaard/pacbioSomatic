@@ -1263,6 +1263,7 @@ process somatic_circos {
         --cna-json     ${data.cnaJson} \\
         --cna-segments ${data.cnaSegments} \\
         --cna-genes    ${data.cnaGenes} \\
+        --genelist     ${params.cnaGenelist} \\
         --purple-dir   ${data.purpleDir} \\
         --wakhan-dir   ${data.wakhanDir} \\
         --amber-baf    ${data.amberBAF} \\
