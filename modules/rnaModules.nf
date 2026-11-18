@@ -31,7 +31,7 @@ process inputFiles_symlinks_ubamRNA {
 process merge_ubams {
     label "high"
     tag "$meta.id"
-    conda "${params.isoseq_pbtk}"
+    conda "${params.condaEnvs.isoseqPbtk}"
 
     publishDir {"${meta.id}/inputSymlinks/merged_ubam/"}, mode: 'copy', pattern: '*.bam'
 
@@ -56,7 +56,7 @@ process merge_ubams {
 process isoseq_refine_cluster {
     label "high"
     tag "$meta.id"
-    conda "${params.isoseq_pbtk}"
+    conda "${params.condaEnvs.isoseqPbtk}"
     
     //publishDir {"${meta.id}/toolsOutputRNA/isoseq/refine_cluster/"}, mode: 'copy', pattern: '*.bam'
 
@@ -82,7 +82,7 @@ process isoseq_refine_cluster {
     """
     isoseq refine \
     ${data[0]} \
-    ${params.kinnex_barcodes12plex} \
+    ${params.kinnexBarcodes12plex} \
     ${meta.id}.${meta.npnRNA}.flnc.refined.bam
 
     isoseq cluster2 \
@@ -97,7 +97,7 @@ process isoseq_refine_cluster {
 process pbmm2_align_clusteredFLNC {
     label "high"
     tag "$meta.id"
-    conda "${params.pbmm2}"
+    conda "${params.condaEnvs.pbmm2}"
 
     publishDir {"${meta.id}/alignments/"}, mode: 'copy', pattern: '*.pbmm2.*'
     //publishDir {"${meta.id}/RNA/pbmm2/clustered/"}, mode: 'copy', pattern: '*.pbmm2.*'
@@ -117,7 +117,7 @@ process pbmm2_align_clusteredFLNC {
     --num-threads ${task.cpus} \
     --bam-index BAI \
     --sample ${meta.npn} \
-    ${params.genome_mmi} \
+    ${params.genomeMmi} \
     ${bam} \
     ${meta.prefixRNA}.clustered.pbmm2.bam
     """
@@ -126,7 +126,7 @@ process pbmm2_align_clusteredFLNC {
 process pbmm2_align_refinedFLNC {
     label "high"
     tag "$meta.id"
-    conda "${params.pbmm2}"
+    conda "${params.condaEnvs.pbmm2}"
 
     publishDir {"${meta.id}/alignments/"}, mode: 'copy', pattern: '*.pbmm2.*'
     
@@ -146,7 +146,7 @@ process pbmm2_align_refinedFLNC {
     --num-threads ${task.cpus} \
     --bam-index BAI \
     --sample ${meta.npn} \
-    ${params.genome_mmi} \
+    ${params.genomeMmi} \
     ${bam} \
     ${meta.prefixRNA}.refined.pbmm2.bam
     """
@@ -156,7 +156,7 @@ process pbmm2_align_refinedFLNC {
 process isoseq_collapse {
     label "high"
     tag "$meta.id"
-    conda "${params.isoseq_pbtk}"
+    conda "${params.condaEnvs.isoseqPbtk}"
     
     publishDir {"${meta.id}/toolsOutputRNA/isoseq/collapsed"}, mode: 'copy'
 
@@ -188,7 +188,7 @@ process isoseq_collapse {
 process pigeon_classify {
     label "high"
     tag "$meta.id"
-    conda "${params.pigeon}"
+    conda "${params.condaEnvs.pigeon}"
 
     publishDir {"${meta.id}/toolsOutputRNA/isoseq/pigeon"}, mode: 'copy'
     
@@ -219,11 +219,11 @@ process pigeon_classify {
 
     pigeon classify \
     ${meta.prefixRNA}.pbmm2.collapsed.sorted.gff \
-    ${params.pigeon_gtf} \
-    ${params.genome_fasta} \
+    ${params.gencodeV49SortedGtf} \
+    ${params.genomeFasta} \
     --fl ${data.flncCounts} \
-    --cage-peak ${params.pigeon_refTSS} \
-    --poly-a ${params.pigeon_polyA} \
+    --cage-peak ${params.pigeonRefTSS} \
+    --poly-a ${params.pigeonPolyA} \
     -o ${meta.prefixRNA}.pigeon
 
     pigeon filter \
@@ -241,7 +241,7 @@ process pigeon_classify {
 process sqanti3_QC {
     label "high"
     tag "$meta.id"
-    conda "${params.sqanti3}"
+    conda "${params.condaEnvs.sqanti3}"
 
     publishDir {"${meta.id}/toolsOutputRNA/sqanti3/"}, mode: 'copy'
     
@@ -254,12 +254,12 @@ process sqanti3_QC {
     script:
    // def (refined_bam,refined_pbi,pbmm2_bam,pbmm2_bai, collapsed_gff,flnccounts,abundance) = data
     """
-    singularity run -B ${params.s_bind} ${params.simgpath}/sqanti3.sif sqanti3_qc.py \
+    singularity run -B ${params.sBind} ${params.simgPath}/sqanti3.sif sqanti3_qc.py \
     --isoforms ${data.collapsedGFF} \
-    --refGTF ${params.gencode_gtf} \
-    --refFasta ${params.genome_fasta} \
-    --CAGE_peak ${params.pigeon_refTSS} \
-    --polyA_motif_list ${params.pigeon_polyA} \
+    --refGTF ${params.gencodeV49Gtf} \
+    --refFasta ${params.genomeFasta} \
+    --CAGE_peak ${params.pigeonRefTSS} \
+    --polyA_motif_list ${params.pigeonPolyA} \
     --fl_count ${data.flncAbundance} \
     --saturation \
     --tusco human \
@@ -272,7 +272,7 @@ process sqanti3_QC {
 process pbfusion {
     label "medium"
     tag "$meta.id"
-    conda "${params.pbfusion}"
+    conda "${params.condaEnvs.pbfusion}"
 
     publishDir {"${meta.id}/toolsOutputRNA/pbfusion"}, mode: 'copy'
    // publishDir {"${meta.id}/TUMORBOARDFILES/"}, mode: 'copy',pattern: "*.INHOUSE.*"
@@ -294,11 +294,11 @@ process pbfusion {
     pbfusion discover \
     -b ${data.refinedBAM} \
     --threads ${task.cpus} \
-    --gtf ${params.gencode_gtf} \
+    --gtf ${params.gencodeV49Gtf} \
     --min-coverage 3 \
     -o ${meta.prefixRNA}.refinedBAM.fusion
 
-    cat  ${meta.prefixRNA}.refinedBAM.fusion.breakpoints.groups.bed| grep -w -f ${params.inhouse_fusionGenelist} > ${meta.prefixRNA}.refinedBAM.PBfusion.INHOUSE.txt
+    cat  ${meta.prefixRNA}.refinedBAM.fusion.breakpoints.groups.bed| grep -w -f ${params.inhouseFusionGenelist} > ${meta.prefixRNA}.refinedBAM.PBfusion.INHOUSE.txt
 
     """
 }
@@ -306,7 +306,7 @@ process pbfusion {
 process fusion_annotate {
     label 'low'
     tag "$meta.id"
-    conda "${params.somaticSummaryEnv}"            // any python3; the tool is stdlib-only
+    conda "${params.condaEnvs.somaticSummaryEnv}"            // any python3; the tool is stdlib-only
 
     publishDir "${meta.id}/toolsOutputRNA/fusion_annotate/", mode: 'copy'
 
@@ -328,13 +328,13 @@ process fusion_annotate {
     """
     set -euo pipefail
 
-    python3 ${params.fusion_annotate_py} \\
+    python3 ${params.fusionAnnotatePy} \\
         --bedpe          ${bedpe} \\
         --annotation     ${annotation} \\
         --domains        ${domains} \\
         --gene-list      ${geneList} \\
-        --fasta          ${params.genome_fasta} \\
-        --min-confidence ${params.fusion_min_confidence} \\
+        --fasta          ${params.genomeFasta} \\
+        --min-confidence ${params.fusionMinConfidence} \\
         --json           ${out}.json \\
         --report         ${out}.txt \\
         --svg            ${out}.svg \\
@@ -345,11 +345,11 @@ process fusion_annotate {
 
     cat <<-END_VERSIONS > ${out}.versions.yml
     "${task.process}":
-        fusion_annotate: \$(python3 ${params.fusion_annotate_py} --version | cut -d' ' -f2)
+        fusion_annotate: \$(python3 ${params.fusionAnnotatePy} --version | cut -d' ' -f2)
         annotation: "${annotation.name} \$(sha256sum ${annotation} | cut -c1-64)"
         domains: "${domains.name} \$(sha256sum ${domains} | cut -c1-64)"
         gene_list: "${geneList.name} \$(sha256sum ${geneList} | cut -c1-64)"
-        fasta: "${params.genome_fasta}"
+        fasta: "${params.genomeFasta}"
     END_VERSIONS
     """
 }
@@ -361,7 +361,7 @@ process isocallProfile {
     tag "$meta.id"
 
     publishDir {"${meta.id}/toolsOutputRNA/isoCall/profile/"}, mode: 'copy'
-    publishDir {"${params.lrsStorageBase}/RNA/isoCallProfiles/"}, mode: 'copy'
+    publishDir {"${params.lrsStorage}/RNA/isoCallProfiles/"}, mode: 'copy'
     input:
     tuple val(meta), path(bam),path(bai)
     
@@ -371,7 +371,7 @@ process isocallProfile {
     script:
     //def (refined_bam,refined_pbi,pbmm2_bam,pbmm2_bai) = data
     """
-    ${params.isocall} profile \
+    ${params.isocallBin} profile \
     --reads ${bam} \
     --output ${meta.prefixRNA}.isoCallProfile.gz
     """
@@ -394,7 +394,7 @@ process isocallMerge {
     script:
     //def (refined_bam,refined_pbi,pbmm2_bam,pbmm2_bai) = data
     """
-    ${params.isocall} merge \
+    ${params.isocallBin} merge \
     --reads ${bam} \
     -o TODO
     """
@@ -417,10 +417,10 @@ process isocallCall {
     script:
     //def (refined_bam,refined_pbi,pbmm2_bam,pbmm2_bai) = data
     """
-    ${params.isocall} call \
+    ${params.isocallBin} call \
     --merged-profile ${profile} \
-    --known-isoforms ${params.isocall_gtf} \
-    --reference ${params.genome_fasta} \
+    --known-isoforms ${params.gencodeV49IsocallGtf} \
+    --reference ${params.genomeFasta} \
     --output-prefix ${meta.prefixRNA}.isoCall  
     """
 
@@ -431,7 +431,7 @@ process isocallCall {
 process oarFish {
     label "medium"
     tag "$meta.id"
-    conda "${params.oarfish}"
+    conda "${params.condaEnvs.oarfish}"
 
     publishDir {"${meta.id}/toolsOutputRNA/oarFish/"}, mode: 'copy', pattern: '*.oarFish.*'
 
@@ -448,8 +448,8 @@ process oarFish {
     
     oarfish \
         --genome-alignments ${meta.prefixRNA}.oarFish.collated.bam \
-        --genome-fasta ${params.genome_fasta} \
-        --annotation ${params.oarfish_gtf} \
+        --genome-fasta ${params.genomeFasta} \
+        --annotation ${params.gencodeV49ChrGtf} \
         --threads ${task.cpus} \
         --output ${meta.prefixRNA}.oarFish
     """
@@ -460,7 +460,7 @@ process oarFish {
 process whatshap_haplotag {
     label 'medium'
     tag "$meta.id"
-    conda "${params.whatshap}"                    // NB: env must also provide samtools
+    conda "${params.condaEnvs.whatshap}"                    // NB: env must also provide samtools
 
     publishDir "${meta.id}/toolsOutputRNA/haplotag/",    mode: 'copy', pattern: "*.haplotag.tsv"
     publishDir "${meta.id}/alignments/",  mode: 'copy', pattern: "*.haplotagged.ba*"
@@ -476,7 +476,7 @@ process whatshap_haplotag {
     script:
     """
     whatshap haplotag \
-        --reference ${params.genome_fasta} \
+        --reference ${params.genomeFasta} \
         --ignore-read-groups \
         --output-haplotag-list ${meta.prefixRNA}.refined.pbmm2.haplotag.tsv \
         --output ${meta.prefixRNA}.refined.pbmm2.haplotagged.bam \
@@ -492,13 +492,13 @@ process whatshap_haplotag {
 process collect_clinical_summaryRNA {
     label "low"
     tag "$meta.id"
-    conda "${params.somaticSummaryEnv}"  // needs pyyaml, pandas, python-calamine
+    conda "${params.condaEnvs.somaticSummaryEnv}"  // needs pyyaml, pandas, python-calamine
 
     publishDir "${meta.id}/TUMORBOARDFILES/", mode: 'copy', pattern: "*.clinical_summaryRNA.html"
     publishDir "${meta.id}/summaryFiles/", mode: 'copy', pattern: "*.clinical_summaryRNA.*"
    
-    publishDir "${params.lrsStorageBase}/clinicalSummaries/rna/json/", mode: 'copy', pattern: "*.clinical_summaryRNA.json"
-    publishDir "${params.lrsStorageBase}/clinicalSummaries/rna/yaml/", mode: 'copy', pattern: "*.clinical_summaryRNA.yaml"
+    publishDir "${params.lrsStorage}/clinicalSummaries/rna/json/", mode: 'copy', pattern: "*.clinical_summaryRNA.json"
+    publishDir "${params.lrsStorage}/clinicalSummaries/rna/yaml/", mode: 'copy', pattern: "*.clinical_summaryRNA.yaml"
 
     input:
     tuple val(meta), val(data)
@@ -509,15 +509,15 @@ process collect_clinical_summaryRNA {
     tuple val(meta), path("${meta.prefixTN}.clinical_summaryRNA.html"), emit: html
     script:
     """
-    python3 ${params.clinical_summaryRNA_py} \
+    python3 ${params.somaticRnaSummaryPy} \
         --case-id            ${meta.id} \
         --npn-rna            ${meta.npn} \
-        --genome-version     ${params.genome_version} \
+        --genome-version     ${params.genomeVersion} \
         --refine-json        ${data.refineReportJSON} \
         --pigeon-raw         ${data.pigeonRawJSON} \
         --pigeon-filtered    ${data.pigeonFilteredJSON} \
         --pbfusion           ${data.fusionInhouse} \
-        --html-template      ${params.clinical_summaryRNA_html} \
+        --html-template      ${params.somaticRnaSummaryHtml} \
         --output             ${meta.prefixTN}.clinical_summaryRNA
     """
 }
@@ -526,13 +526,13 @@ process collect_clinical_summaryRNA {
 process collect_clinical_summaryRNA {
     label "low"
     tag "$meta.id"
-    conda "${params.somaticSummaryEnv}"  // needs pyyaml, pandas, python-calamine
+    conda "${params.condaEnvs.somaticSummaryEnv}"  // needs pyyaml, pandas, python-calamine
 
     publishDir "${meta.id}/TUMORBOARDFILES/", mode: 'copy', pattern: "*.clinical_summaryRNA.html"
     publishDir "${meta.id}/summaryFiles/", mode: 'copy', pattern: "*.clinical_summaryRNA.*"
    
-    publishDir "${params.lrsStorageBase}/clinicalSummaries/rna/json/", mode: 'copy', pattern: "*.clinical_summaryRNA.json"
-    publishDir "${params.lrsStorageBase}/clinicalSummaries/rna/yaml/", mode: 'copy', pattern: "*.clinical_summaryRNA.yaml"
+    publishDir "${params.lrsStorage}/clinicalSummaries/rna/json/", mode: 'copy', pattern: "*.clinical_summaryRNA.json"
+    publishDir "${params.lrsStorage}/clinicalSummaries/rna/yaml/", mode: 'copy', pattern: "*.clinical_summaryRNA.yaml"
 
     input:
     tuple val(meta), val(data)
@@ -552,10 +552,10 @@ process collect_clinical_summaryRNA {
     def fusionAnnot = (data.fusionAnnot == null || data.fusionAnnot instanceof List) ? '' : "--fusion-annot ${data.fusionAnnot}"
     
     """
-    python3 ${params.clinical_summaryRNA_py} \
+    python3 ${params.somaticRnaSummaryPy} \
         --case-id            ${meta.id} \
         --npn-rna            ${meta.npn} \
-        --genome-version     ${params.genome_version} \
+        --genome-version     ${params.genomeVersion} \
         --refine-json        ${data.refineReportJSON} \
         --pigeon-raw         ${data.pigeonRawJSON} \
         --pigeon-filtered    ${data.pigeonFilteredJSON} \
@@ -563,7 +563,7 @@ process collect_clinical_summaryRNA {
         ${fusionAnnot} \
         ${spliceJson} \
         ${spliceHref} \
-        --html-template      ${params.clinical_summaryRNA_html} \
+        --html-template      ${params.somaticRnaSummaryHtml} \
         --output             ${meta.prefixTN}.clinical_summaryRNA
     """
 }
@@ -572,7 +572,7 @@ process collect_clinical_summaryRNA {
 process ase_readcounter {
     label 'medium'
     tag "$meta.id"
-    conda "${params.aseGatkEnv}"                  // gatk4 + bcftools + htslib(tabix)
+    conda "${params.condaEnvs.aseGatk}"                  // gatk4 + bcftools + htslib(tabix)
 
     publishDir "${meta.id}/toolsOutputRNA/ASE/", mode: 'copy', pattern: "*.ASE.*.tsv"
 
@@ -593,11 +593,11 @@ process ase_readcounter {
     tabix -p vcf germline.hets.vcf.gz
 
     gatk ASEReadCounter \
-        -R ${params.genome_fasta} \
+        -R ${params.genomeFasta} \
         -I ${data.bam} \
         -V germline.hets.vcf.gz \
-        --min-mapping-quality ${params.ase_minMapQ} \
-        --min-base-quality ${params.ase_minBaseQ} \
+        --min-mapping-quality ${params.aseMinMapQ} \
+        --min-base-quality ${params.aseMinBaseQ} \
         -O ${meta.prefixRNA}.ASE.germlineHet.tsv
 
     # --- somatic SNVs (tumour-only PASS) ---
@@ -607,11 +607,11 @@ process ase_readcounter {
         tabix -p vcf somatic.snvs.vcf.gz
 
         gatk ASEReadCounter \
-            -R ${params.genome_fasta} \
+            -R ${params.genomeFasta} \
             -I ${data.bam} \
             -V somatic.snvs.vcf.gz \
-            --min-mapping-quality ${params.ase_minMapQ} \
-            --min-base-quality ${params.ase_minBaseQ} \
+            --min-mapping-quality ${params.aseMinMapQ} \
+            --min-base-quality ${params.aseMinBaseQ} \
             -O ${meta.prefixRNA}.ASE.somatic.tsv || true
     fi
     """
@@ -623,7 +623,7 @@ process ase_readcounter {
 process expression_outlier {
     label 'low'
     tag "$meta.id"
-    conda "${params.rnaOUTRIDER}"                        // R: OUTRIDER (+ deps)
+    conda "${params.condaEnvs.rnaOutrider}"                        // R: OUTRIDER (+ deps)
 
     publishDir "${meta.id}/toolsOutputRNA/expression/",              mode: 'copy', pattern: "*.outliers.tsv"
     publishDir "${meta.id}/TUMORBOARDFILES/RNA/",         mode: 'copy', pattern: "*.outliers.tsv"
@@ -638,12 +638,12 @@ process expression_outlier {
 
     script:
     """
-    Rscript ${params.expression_outlier_R} \
+    Rscript ${params.expressionOutlierR} \
     --sample         ${meta.prefixRNA} \
     --classification ${data.classification} \
     --abundance      ${data.abundance} \
     --background     ${params.exprBackground} \
-    --min-cohort     ${params.expr_minCohort} \
+    --min-cohort     ${params.exprMinCohort} \
     --out            ${meta.prefixRNA}
     """
 }
@@ -655,7 +655,7 @@ process expression_outlier {
 process splicing_isoformswitch {
     label 'medium'
     tag "$meta.id"
-    conda "${params.rnaISO}"                        // R: IsoformSwitchAnalyzeR (+ BSgenome.Hsapiens.UCSC.hg38)
+    conda "${params.condaEnvs.rnaIso}"                        // R: IsoformSwitchAnalyzeR (+ BSgenome.Hsapiens.UCSC.hg38)
 
     publishDir "${meta.id}/toolsOutputRNA/splicing/",        mode: 'copy'
     //publishDir "${meta.id}/TUMORBOARDFILES/RNA/", mode: 'copy', pattern: "*.exonSkipping.panel.tsv"
@@ -669,14 +669,14 @@ process splicing_isoformswitch {
 
     script:
     """
-    Rscript ${params.isoformSwitch_R} \
+    Rscript ${params.isoformSwitchR} \
         --sample         ${meta.prefixRNA} \
         --gff            ${data.gff} \
         --abundance      ${data.abundance} \
         --classification ${data.classification} \
-        --gtf            ${params.pigeon_gtf} \
-        --genelist       ${params.inhouse_splicing_genelist} \
-        --min-if         ${params.splicing_minIF} \
+        --gtf            ${params.gencodeV49SortedGtf} \
+        --genelist       ${params.inhouseSplicingGenelist} \
+        --min-if         ${params.isoformSwitchMinIF} \
         --out            ${meta.prefixRNA}
     """
 }
@@ -684,12 +684,12 @@ process splicing_isoformswitch {
 process lrs_splice {
     label 'medium'
     tag "$meta.id"
-    conda "${params.somaticSummaryEnv}"                // python3 + pysam (nothing else)
+    conda "${params.condaEnvs.somaticSummaryEnv}"                // python3 + pysam (nothing else)
 
     //    publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
     publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
 
-    publishDir "${params.lrsStorageBase}/splicing/json/", mode: 'copy', pattern: "*.aberrantSplicing.json"
+    publishDir "${params.lrsStorage}/splicing/json/", mode: 'copy', pattern: "*.aberrantSplicing.json"
 
     input:
     tuple val(meta), val(data)
@@ -705,27 +705,27 @@ process lrs_splice {
 
     script:
     def somaticVcf = (data.somaticVcf == null || data.somaticVcf instanceof List) ? '' : "--somatic-vcf ${data.somaticVcf}"
-    def genelist2   = params.inhouse_splicing_genelist ? "--genes ${params.inhouse_splicing_genelist}" : ''
-    def aliases    = params.splicing_genelist_aliases ? "--gene-aliases ${params.splicing_genelist_aliases}" : ''
+    def genelist2   = params.inhouseSplicingGenelist ? "--genes ${params.inhouseSplicingGenelist}" : ''
+    def aliases    = params.spliceGeneAliases ? "--gene-aliases ${params.spliceGeneAliases}" : ''
     """
-    python3 ${params.splicing_py} \
+    python3 ${params.lrsSplicePy} \
         --bam                 ${data.bam} \
-        --gtf                 ${params.gencode_gtf} \
-        --fasta               ${params.genome_fasta} \
+        --gtf                 ${params.gencodeV49Gtf} \
+        --fasta               ${params.genomeFasta} \
         ${genelist2} \
         ${aliases} \
         ${somaticVcf} \
         --sample              ${meta.prefixRNA} \
-        --min-reads           ${params.splice_minReads} \
-        --min-usage           ${params.splice_minUsage} \
-        --min-anchor          ${params.splice_minAnchor} \
-        --min-cluster-depth   ${params.splice_minDepth} \
-        --max-fdr             ${params.splice_maxFDR} \
-        --high-min-reads      ${params.splice_highMinReads} \
-        --tandem-max-shift    ${params.splice_tandemMaxShift} \
-        --annotated-cap       ${params.splice_annotatedCap} \
-        --ir-min-frac         ${params.splice_irMinFrac} \
-        --variant-window      ${params.splice_variantWindow} \
+        --min-reads           ${params.spliceMinReads} \
+        --min-usage           ${params.spliceMinUsage} \
+        --min-anchor          ${params.spliceMinAnchor} \
+        --min-cluster-depth   ${params.spliceMinDepth} \
+        --max-fdr             ${params.spliceMaxFDR} \
+        --high-min-reads      ${params.spliceHighMinReads} \
+        --tandem-max-shift    ${params.spliceTandemMaxShift} \
+        --annotated-cap       ${params.spliceAnnotatedCap} \
+        --ir-min-frac         ${params.spliceIrMinFrac} \
+        --variant-window      ${params.spliceVariantWindow} \
         --out-tsv             ${meta.prefixRNA}.aberrantSplicing.tsv \
         --out-json            ${meta.prefixRNA}.aberrantSplicing.json
 
@@ -744,13 +744,13 @@ process lrs_splice {
 process lrs_splice {
     label 'medium'
     tag "$meta.id"
-    conda "${params.somaticSummaryEnv}"                // python3 + pysam (nothing else)
+    conda "${params.condaEnvs.somaticSummaryEnv}"                // python3 + pysam (nothing else)
 
     publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing.*"
 
     publishDir "${meta.id}/TUMORBOARDFILES/RNA/",                      mode: 'copy', pattern: "*.aberrantSplicing.panel.tsv"
     // central collection point for building the cohort recurrence store
-    publishDir "${params.lrsStorageBase}/splicing/json/",              mode: 'copy', pattern: "*.aberrantSplicing.json"
+    publishDir "${params.lrsStorage}/splicing/json/",              mode: 'copy', pattern: "*.aberrantSplicing.json"
 
     input:
     tuple val(meta), val(data)
@@ -764,18 +764,18 @@ process lrs_splice {
 
     script:
     def somaticVcf = (data.somaticVcf == null || data.somaticVcf instanceof List) ? '' : "--somatic-vcf ${data.somaticVcf}"
-    def genelist2   = params.inhouse_splicing_genelist ? "--genes ${params.inhouse_splicing_genelist}" : ''
-    def aliases    = params.splicing_genelist_aliases ? "--gene-aliases ${params.splicing_genelist_aliases}" : ''
+    def genelist2   = params.inhouseSplicingGenelist ? "--genes ${params.inhouseSplicingGenelist}" : ''
+    def aliases    = params.spliceGeneAliases ? "--gene-aliases ${params.spliceGeneAliases}" : ''
     // patient key: must equal the patient column used when adding samples to the store
     def patient    = "--patient ${meta.id}"
     def tumourType = meta.pcgr ? "--tumour-type ${meta.pcgr}" : ''
-    def recurrence = recurrenceDb     ? "--recurrence-db ${recurrenceDb} --recurrence-mode ${params.splice_recurrenceMode}" : ''
+    def recurrence = recurrenceDb     ? "--recurrence-db ${recurrenceDb} --recurrence-mode ${params.spliceRecurrenceMode}" : ''
     def exempt     = recurrenceExempt ? "--recurrence-exempt ${recurrenceExempt}" : ''
     """
-    python3 ${params.splicing_py} \
+    python3 ${params.lrsSplicePy} \
         --bam                 ${data.bam} \
-        --gtf                 ${params.gencode_gtf} \
-        --fasta               ${params.genome_fasta} \
+        --gtf                 ${params.gencodeV49Gtf} \
+        --fasta               ${params.genomeFasta} \
         ${genelist2} \
         ${aliases} \
         ${somaticVcf} \
@@ -784,16 +784,16 @@ process lrs_splice {
         ${tumourType} \
         ${recurrence} \
         ${exempt} \
-        --high-min-reads      ${params.splice_highMinReads} \
-        --tandem-max-shift    ${params.splice_tandemMaxShift} \
-        --annotated-cap       ${params.splice_annotatedCap} \
-        --min-reads           ${params.splice_minReads} \
-        --min-usage           ${params.splice_minUsage} \
-        --min-anchor          ${params.splice_minAnchor} \
-        --min-cluster-depth   ${params.splice_minDepth} \
-        --max-fdr             ${params.splice_maxFDR} \
-        --ir-min-frac         ${params.splice_irMinFrac} \
-        --variant-window      ${params.splice_variantWindow} \
+        --high-min-reads      ${params.spliceHighMinReads} \
+        --tandem-max-shift    ${params.spliceTandemMaxShift} \
+        --annotated-cap       ${params.spliceAnnotatedCap} \
+        --min-reads           ${params.spliceMinReads} \
+        --min-usage           ${params.spliceMinUsage} \
+        --min-anchor          ${params.spliceMinAnchor} \
+        --min-cluster-depth   ${params.spliceMinDepth} \
+        --max-fdr             ${params.spliceMaxFDR} \
+        --ir-min-frac         ${params.spliceIrMinFrac} \
+        --variant-window      ${params.spliceVariantWindow} \
         --out-tsv             ${meta.prefixRNA}.aberrantSplicing.tsv \
         --out-json            ${meta.prefixRNA}.aberrantSplicing.json
 
@@ -811,7 +811,7 @@ process lrs_splice {
 process lrs_splice_report {
     label 'low'
     tag "$meta.id"
-    conda "${params.somaticSummaryEnv}"                // stdlib only, but keep one env
+    conda "${params.condaEnvs.somaticSummaryEnv}"                // stdlib only, but keep one env
 
     publishDir "${meta.id}/toolsOutputRNA/splicing/aberrantSplicing/", mode: 'copy', pattern: "*.aberrantSplicing*.html"
     publishDir "${meta.id}/TUMORBOARDFILES/RNA/",                      mode: 'copy', pattern: "*.aberrantSplicing.report.html"
@@ -826,13 +826,13 @@ process lrs_splice_report {
     script:
     """
     # embeddable fragment -> concatenated into clinical_summaryRNA
-    python3 ${params.splicing_html} \
+    python3 ${params.lrsSpliceReportPy} \
         --json  ${data.json} \
         --out   ${meta.prefixRNA}.aberrantSplicing.section.html \
         --mode  fragment
 
     # standalone, for review / QC outside the summary
-    python3 ${params.splicing_html} \
+    python3 ${params.lrsSpliceReportPy} \
         --json  ${data.json} \
         --out   ${meta.prefixRNA}.aberrantSplicing.report.html \
         --mode  standalone

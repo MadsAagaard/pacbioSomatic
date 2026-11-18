@@ -20,7 +20,7 @@ user  = "$USER"
 runID = "${date}.${user}"
  
 // -------------------------- naming (single source) ---------------------------
-//def samplePrefix = { npn, sampletype -> "${npn}.${sampletype}.${params.genome_version}.${params.readSet}" }
+//def samplePrefix = { npn, sampletype -> "${npn}.${sampletype}.${params.genomeVersion}.${params.readSet}" }
 
 def pcgrTag = { pcgr ->
     def code = pcgr?.toString()?.trim()
@@ -29,11 +29,11 @@ def pcgrTag = { pcgr ->
 
 def samplePrefix = { npn, sampletype, pcgr = null ->
     def tag = (sampletype in ['tumor', 'rna']) ? pcgrTag(pcgr) : ''
-    "${npn}.${sampletype}${tag}.${params.genome_version}.${params.readSet}"
+    "${npn}.${sampletype}${tag}.${params.genomeVersion}.${params.readSet}"
 }
 
 def tnPrefix = { id, pcgr = null ->
-    "${id}${pcgrTag(pcgr)}.${params.genome_version}.${params.readSet}"
+    "${id}${pcgrTag(pcgr)}.${params.genomeVersion}.${params.readSet}"
 }
 // 
 def isMissing = { v -> (v == null) || (v.toString().trim().toLowerCase() in ['', 'na', '-', '.', 'null']) }
@@ -45,12 +45,12 @@ def samplePrefix = { npn, sampletype, pcgr = null ->
     def code    = pcgr?.toString()?.trim()
     def useCode = code && !(code.toLowerCase() in ['', 'na', '-', '.', 'null'])
     def tag     = (sampletype in ['tumor', 'rna'] && useCode) ? ".pcgr_${code}" : ''
-    "${npn}.${sampletype}${tag}.${params.genome_version}.${params.readSet}"
+    "${npn}.${sampletype}${tag}.${params.genomeVersion}.${params.readSet}"
 }
 
-def tnPrefix     = { id  -> "${id}.${params.genome_version}.${params.readSet}" }
+def tnPrefix     = { id  -> "${id}.${params.genomeVersion}.${params.readSet}" }
 
-def rnaPrefix    = { id, npn            -> "${npn}.${params.genome_version}.rna" }
+def rnaPrefix    = { id, npn            -> "${npn}.${params.genomeVersion}.rna" }
 
 def isMissing = { v -> (v == null) || (v.toString().trim().toLowerCase() in ['', 'na', '-', '.', 'null']) }
 */
@@ -64,7 +64,7 @@ def dnaInputBam
 if (params.inputDNA) {
     dnaInputBam = params.allReads ? "${params.inputDNA}/*.bam" : "${params.inputDNA}/*.hifi_reads.*.bam"
 } else {
-    dnaInputBam = params.allReads ? "${params.dataArchiveDNA}/**/*.bam" : "${params.dataArchiveDNA}/**/*.hifi_reads.*.bam"
+    dnaInputBam = params.allReads ? "${params.dataArchive}/**/*.bam" : "${params.dataArchive}/**/*.hifi_reads.*.bam"
 }
 
 // ---- RNA demux ubams: <archive>/<run>/rna_demultiplex/<npn>.*.lima.*.SMfixed.bam ----
@@ -191,7 +191,10 @@ include {
     collect_clinical_summary;
     purple_genome_view;
     wakhan;
+    wakhan05;
     alignmentLinks_tumorboard;
+    cna_consensus;
+    somatic_circos;
 } from './modules/dnaModules.nf'
 
 
@@ -383,6 +386,7 @@ workflow DNA_SOMATIC {
 
 
         wakhan(phasedAll_with_severusVCF)
+        wakhan05(phasedAll_with_severusVCF)
         purple(purple_pass_input)
 
         // HRD
@@ -436,6 +440,52 @@ workflow DNA_SOMATIC {
             | map { meta, j -> [meta.id, meta.sampletype, j] } | groupTuple(by: 0)
             | map { id, st, js -> [id, js[st.indexOf('normal')], js[st.indexOf('tumor')]] }
             | set { methbat_for_yaml_ch }
+
+
+        purple.out.purpleDir                    | map { meta, dir  -> [meta.id, meta, dir] }
+            | join( wakhan.out.wakhanDir        | map { meta, dir  -> [meta.id, dir] } )
+            | join( deepSomatic_edits.out.vcf   | map { meta, vcf  -> [meta.id, vcf] } )
+            | join( methbat_for_yaml_ch )                                   // (id, normalJson, tumorJson)
+            | join( phasedAll                   | map { meta, data -> [meta.id, data.bamTumor] } )
+            | map { id, meta, purpleDir, wakhanDir, vcf, metN, metT, bamT ->
+                tuple(meta, [
+                    purpleDir: purpleDir,
+                    wakhanDir: wakhanDir,
+                    vcf:       vcf,
+                    metNormal: metN,
+                    metTumor:  metT,
+                    bamTumor:  bamT
+                ])
+            }
+            | set { cna_consensus_input_ch }
+
+        cna_consensus(cna_consensus_input_ch)
+
+        // somatic genome overview circos (TEST PHASE): interactive HTML (+ PNG/SVG) per case
+        if (!params.skipSomaticCircos) {
+            cna_consensus.out.json                  | map { meta, j -> [meta.id, meta, j] }
+                | join( cna_consensus.out.tables    | map { meta, seg, genes -> [meta.id, seg, genes] } )
+                | join( purple.out.purpleDir        | map { meta, dir -> [meta.id, dir] } )
+                | join( wakhan.out.wakhanDir        | map { meta, dir -> [meta.id, dir] } )
+                | join( amber.out.for_yaml_summary  | map { meta, qc, baf -> [meta.id, baf] } )
+                | join( deepSomatic_edits.out.vcf   | map { meta, vcf -> [meta.id, vcf] } )
+                | join( severus_edits.out.vcf       | map { meta, vcf -> [meta.id, vcf] } )
+                | map { id, meta, cnaJson, seg, genes, purpleDir, wakhanDir, amberBAF, vcf, svVcf ->
+                    tuple(meta, [
+                        cnaJson:     cnaJson,
+                        cnaSegments: seg,
+                        cnaGenes:    genes,
+                        purpleDir:   purpleDir,
+                        wakhanDir:   wakhanDir,
+                        amberBAF:    amberBAF,
+                        vcf:         vcf,
+                        svVcf:       svVcf
+                    ])
+                }
+                | set { somatic_circos_input_ch }
+
+            somatic_circos(somatic_circos_input_ch)
+        }
 
 
         amber.out.for_yaml_summary
@@ -498,6 +548,7 @@ workflow DNA_SOMATIC {
         methylBedByCase  = methyl_bed_by_case           // (caseID, normalBed, tumorBed) — for INTEGRATION
         severusSV        = severus_edits.out.vcf         // (meta, somatic SV vcf) — for fusion x SV
         clinicalSummary  = collect_clinical_summary.out.json
+        cnaConsensus     = cna_consensus.out.json            // (meta, json)
 }
 
 
@@ -621,9 +672,9 @@ workflow RNA_FUSION {
         if (!params.skipFusionAnnotate) {
             fusion_annotate(
                 pbfusion.out.bedpe,
-                file(params.fusion_annotation, checkIfExists: true),
-                file(params.fusion_domains,    checkIfExists: true),
-                file(params.fusion_gene_list,  checkIfExists: true)
+                file(params.fusionAnnotation, checkIfExists: true),
+                file(params.fusionDomains,    checkIfExists: true),
+                file(params.fusionGeneList,  checkIfExists: true)
             )
             fusionAnnot = fusion_annotate.out.json
         }
@@ -653,8 +704,8 @@ workflow RNA_SPLICING {
 
         // optional inputs: a real path, or [] (Nextflow stages nothing). Passed as
         // path inputs, not strings, so -resume reruns when the store is updated.
-        def recDb     = params.splice_recurrenceDb     ? file(params.splice_recurrenceDb, checkIfExists: true)     : []
-        def recExempt = params.splice_recurrenceExempt ? file(params.splice_recurrenceExempt, checkIfExists: true) : []
+        def recDb     = params.spliceRecurrenceDb     ? file(params.spliceRecurrenceDb, checkIfExists: true)     : []
+        def recExempt = params.spliceRecurrenceExempt ? file(params.spliceRecurrenceExempt, checkIfExists: true) : []
         lrs_splice(splice_in, recDb, recExempt)
 
         lrs_splice.out.json
@@ -893,14 +944,17 @@ log.info """\
 KG Vejle: PacBio LRS  DNA(T-N somatic) + RNA(Kinnex)  v2
 ======================================================
 Genome        : ${params.genome}
-Genome FASTA  : ${params.genome_fasta}
-Genome ver.   : ${params.genome_version}
-ROI           : ${params.ROI}
-GATK image    : ${params.gatk_image}
+Genome FASTA  : ${params.genomeFasta}
+Genome ver.   : ${params.genomeVersion}
+ROI           : ${params.roiBed}
+GATK image    : ${params.gatkImage}
 skipRNA       : ${params.skipRNA}
 Samplesheet   : ${params.samplesheet}
 RunID         : ${runID}
 workDir       : ${workflow.workDir}
+error mode    : ${params.errorMode}
+lrsShared     : ${params.lrsSharedDir}
+lrsCustomTools: ${params.lrsCustomToolsBase}
 """
 
 
@@ -972,4 +1026,41 @@ workflow DNA {
 workflow RNA {
     if (params.skipRNA) { exit 1, "RNA entry called with --skipRNA set." }
     RNA_ARM(rna_ch)
+}
+
+
+/* =============================================================================
+ *  COMPLETION
+ * ========================================================================== */
+workflow.onComplete {
+
+    // ---- failure manifest (same as germline and PTCP) -----------------------
+    // errorMode = 'cohort' (the somatic default) lets a failed task be ignored
+    // so the rest of the run finishes. That is only acceptable if the skip is
+    // recorded somewhere a human will see it.
+    def failed = (workflow.stats.failedCount ?: 0) + (workflow.stats.ignoredCount ?: 0)
+
+    if (failed > 0) {
+        try {
+            def f = file("${params.outputDirBase}/runInfo/${params.dateStamp}_${params.ssBase}/FAILED_TASKS.somatic.txt")
+            f.parent.mkdirs()
+            f.text = """\
+                Run          : ${workflow.runName}
+                Completed    : ${workflow.complete}
+                Succeeded    : ${workflow.stats.succeedCount}
+                Failed       : ${workflow.stats.failedCount}
+                Ignored      : ${workflow.stats.ignoredCount}
+                Error mode   : ${params.errorMode}
+                Launch dir   : ${workflow.launchDir}
+
+                Per-task detail is in the trace file under NextflowReports/.
+                Output for the affected samples is INCOMPLETE and must not be
+                reported without review.
+                """.stripIndent()
+            log.warn "*** ${failed} task(s) failed or were ignored — see ${f} ***"
+        }
+        catch (Exception e) {
+            log.warn "Could not write FAILED_TASKS.somatic.txt: ${e.message}"
+        }
+    }
 }
