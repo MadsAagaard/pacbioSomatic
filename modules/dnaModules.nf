@@ -1253,6 +1253,9 @@ process somatic_circos {
 
     script:
     """
+    # Chromium for the PNG/SVG is installed inside circosEnv (playwright install chromium)
+    export PLAYWRIGHT_BROWSERS_PATH=\${PLAYWRIGHT_BROWSERS_PATH:-\$CONDA_PREFIX/ms-playwright}
+
     python3 ${params.somaticCircosPy} \\
         --sample       ${meta.prefixTN} \\
         --out          ${meta.prefixTN}.somaticCircos \\
