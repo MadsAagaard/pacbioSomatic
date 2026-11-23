@@ -1273,6 +1273,39 @@ process somatic_circos {
     """
 }
 
+process methclass {
+    label "low"
+    tag "$meta.id"
+    conda "${params.condaEnvs.integration}"     // somaticSummaryEnv: python3 + numpy (+ pysam: tabix block fetch)
+
+    publishDir "${meta.id}/toolsOutputDNA/methClass/",    mode: 'copy'
+    publishDir "${meta.id}/TUMORBOARDFILES/methclass/",   mode: 'copy', pattern: "*.methclass.{html,json}"
+
+    input:
+    tuple val(meta), val(data)      // data: met5mC (tumor 5mC pileup bed.gz; its .tbi sits next to it)
+
+    output:
+    tuple val(meta), path("${meta.prefixTN}.methclass.json"), emit: json
+    tuple val(meta), path("${meta.prefixTN}.methclass.tsv"),  emit: tsv
+    tuple val(meta), path("${meta.prefixTN}.methclass.html"), emit: html
+
+    script:
+    // TEST PHASE: methylation tumor-type classification against TCGA 450K profiles (lrsCustomTools methclass).
+    // The corrected run gives the primary call; the raw run is shown for comparison. Not in the clinical summary.
+    def code = meta.pcgr?.toString()?.trim()
+    def pcgr = (code ==~ /\d+/) ? "--pcgr-code ${code}" : ""      // no code (NA, empty): ranking without the site rank
+    """
+    python3 ${params.methclassPy} classify \\
+        --reference    ${params.methclassReference} \\
+        --build-report ${params.methclassBuildReport} \\
+        --thresholds   ${params.methclassThresholds} \\
+        --pileup       ${data.met5mC} \\
+        --sample-id    ${meta.prefixTN} \\
+        --prefix       ${meta.prefixTN} \\
+        ${pcgr}
+    """
+}
+
 
 
 
