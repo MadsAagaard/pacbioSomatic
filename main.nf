@@ -195,6 +195,7 @@ include {
     alignmentLinks_tumorboard;
     cna_consensus;
     somatic_circos;
+    methclass;
 } from './modules/dnaModules.nf'
 
 
@@ -353,6 +354,18 @@ workflow DNA_SOMATIC {
 
         methBatNEW_pileup(phasedPerSample)
         methBatNEW_profile_single(methBatNEW_pileup.out.met5mC)
+
+        // methylation tumor-type classification (TEST PHASE): tumor 5mC pileup only, case meta from phasedAll (prefixTN, pcgr)
+        if (!params.skipMethclass) {
+            methBatNEW_pileup.out.met5mC
+                | filter { meta, bed, tbi -> meta.sampletype == 'tumor' }
+                | map    { meta, bed, tbi -> [meta.id, bed] }
+                | join( phasedAll | map { meta, data -> [meta.id, meta] } )
+                | map    { id, bed, meta -> tuple(meta, [met5mC: bed]) }
+                | set { methclass_input_ch }
+
+            methclass(methclass_input_ch)
+        }
 
         // per-case T/N combined bedMethyl (for INTEGRATION methylation x expression)
         pbCPGtools.out
