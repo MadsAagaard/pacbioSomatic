@@ -76,16 +76,53 @@ process pbmm2_align_mergedData {
     tuple val(meta), path("${meta.prefix}.pbmm2.bam"), path("${meta.prefix}.pbmm2*bai"),  emit: bam
     
     script:
+    // pbbam (inside pbmm2) cannot merge BAM headers whose @HD sort orders differ. Revio ICS 13.3 writes
+    // SO:coordinate on unaligned HiFi BAMs, ICS 13.5 writes SO:unsorted, so a fofn that mixes runs from
+    // both fails with "Could not open or determine read input type(s)". The inputs are grouped by their
+    // @HD line: one group = the plain pbmm2 call as before; several groups = one pbmm2 per group (same
+    // --sample) + samtools merge. The @HD line is read with gzip (BAM = BGZF), so grouping needs no samtools.
     """
-    pbmm2 align \
-    --preset HIFI \
-    --sort \
-    --num-threads ${task.cpus} \
-    --bam-index BAI \
-    --sample ${meta.npn} \
-    ${params.genomeMmi} \
-    ${fofn} \
-    ${meta.prefix}.pbmm2.bam
+    while read -r f; do
+        [ -n "\$f" ] || continue
+        hd=\$( { gzip -dc "\$f" 2>/dev/null || true; } | head -c 65536 | tr '\\t' ' ' | grep -ao '@HD[ -~]*' | head -1 || true )
+        printf '%s\\t%s\\n' "\${hd:-NO_HD}" "\$f"
+    done < ${fofn} > hd_groups.tsv
+    cut -f1 hd_groups.tsv | sort -u > hd_list.txt
+    ngroups=\$(wc -l < hd_list.txt)
+
+    if [ "\$ngroups" -le 1 ]; then
+        pbmm2 align \
+        --preset HIFI \
+        --sort \
+        --num-threads ${task.cpus} \
+        --bam-index BAI \
+        --sample ${meta.npn} \
+        ${params.genomeMmi} \
+        ${fofn} \
+        ${meta.prefix}.pbmm2.bam
+    else
+        echo "pbmm2_align_mergedData: \$ngroups different @HD lines in ${fofn}, aligning per group:" >&2
+        cat hd_list.txt >&2
+        command -v samtools >/dev/null || { echo "samtools not on PATH (needed to merge the @HD groups)" >&2; exit 1; }
+        parts=()
+        i=0
+        while read -r hd; do
+            i=\$((i + 1))
+            awk -F'\\t' -v h="\$hd" '\$1 == h { print \$2 }' hd_groups.tsv > hdgroup\$i.fofn
+            pbmm2 align \
+            --preset HIFI \
+            --sort \
+            --num-threads ${task.cpus} \
+            --sample ${meta.npn} \
+            ${params.genomeMmi} \
+            hdgroup\$i.fofn \
+            hdgroup\$i.pbmm2.bam < /dev/null
+            parts+=("hdgroup\$i.pbmm2.bam")
+        done < hd_list.txt
+        samtools merge -@ ${task.cpus} -c -p -o ${meta.prefix}.pbmm2.bam "\${parts[@]}"
+        samtools index -@ ${task.cpus} ${meta.prefix}.pbmm2.bam
+        rm -f hdgroup*.pbmm2.bam hdgroup*.pbmm2.bam.bai
+    fi
     """
 }
 
